@@ -20,6 +20,20 @@ config LCZ_LWM2M_CLIENT_INIT_PRIORITY
     help
       Recommended to be higher than main thread init priority.
 
+config LCZ_LWM2M_CLIENT_ENDPOINT_NAME
+	string "Endpoint name"
+	default "my_device"
+	help
+	  Endpoint name used by the application for starting a connection.
+
+config LCZ_LWM2M_CLIENT_REBOOT_DELAY_SECONDS
+	int "Delay before reboot (seconds)"
+	default 5
+	help
+	  If the user does not override the reboot callback
+	  (lcz_lwm2m_client_register_reboot_callback), this is the delay
+	  used before a reboot is initiated.
+
 menuconfig LCZ_LWM2M_CLIENT_SETTINGS
 	bool "LwM2M Client Settings"
 
@@ -29,7 +43,55 @@ if LCZ_LWM2M_TRANSPORT_UDP
 
 config LCZ_LWM2M_SERVER_URL
 	string "Server URL"
-	default "lwm2m.connection.com"
+
+config LCZ_LWM2M_SECURITY_MODE
+	int "Security mode"
+	range 0 4
+	help
+	  0 - PSK
+	  1 - RPK
+	  2 - Certificate
+	  3 - No Security
+	  4 - Certificate with EST
+
+config LCZ_LWM2M_TLS_TAG
+	int "TLS tag for secure connection"
+	depends on LCZ_LWM2M_DTLS_SUPPORT
+	default 999
+	range 0 65535
+
+config LCZ_LWM2M_PSK_ID
+	string "PSK ID"
+	help
+	  Pre-shared key identity
+
+config LCZ_LWM2M_PSK
+	string "PSK"
+	help
+	  PSK as a HEX string. This string will be converted to binary and
+	  used as the PSK.
+	  Length of this string needs to be LCZ_LWM2M_SECURITY_KEY_SIZE.
+
+config LCZ_LWM2M_BOOTSTRAP
+	bool "Enable bootstrap"
+
+if LCZ_LWM2M_BOOTSTRAP
+
+config LCZ_LWM2M_BOOTSTRAP_SETTING
+	int "Bootstrap setting"
+	range 0 1
+	default 0
+	help
+	  0 - disabled
+	  1 - enabled
+
+config LCZ_LWM2M_SHORT_SERVER_ID
+	int "Short server ID"
+	depends on LCZ_LWM2M_BOOTSTRAP
+	range 1 65534
+	default 1
+
+endif # LCZ_LWM2M_BOOTSTRAP
 
 endif # LCZ_LWM2M_TRANSPORT_UDP
 

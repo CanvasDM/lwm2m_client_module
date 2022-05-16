@@ -17,6 +17,9 @@ LOG_MODULE_REGISTER(lcz_lwm2m_client, CONFIG_LCZ_LWM2M_CLIENT_LOG_LEVEL);
 #include <sys/reboot.h>
 #include <sys/util.h>
 #include "lcz_lwm2m_client.h"
+#if defined(CONFIG_LCZ_LWM2M_CLIENT_ENABLE_ATTRIBUTES)
+#include "attr.h"
+#endif
 
 /**************************************************************************************************/
 /* Local Constant, Macro and Type Definitions                                                     */
@@ -105,7 +108,7 @@ static void rd_client_event(struct lwm2m_ctx *client, enum lwm2m_rd_client_event
 {
 	switch (client_event) {
 	case LWM2M_RD_CLIENT_EVENT_NONE:
-		/* do nothing */
+		/* Do nothing */
 		break;
 
 	case LWM2M_RD_CLIENT_EVENT_BOOTSTRAP_REG_FAILURE:
@@ -151,7 +154,7 @@ static void rd_client_event(struct lwm2m_ctx *client, enum lwm2m_rd_client_event
 		break;
 
 	case LWM2M_RD_CLIENT_EVENT_QUEUE_MODE_RX_OFF:
-		/* do nothing */
+		/* Do nothing */
 		break;
 
 	case LWM2M_RD_CLIENT_EVENT_NETWORK_ERROR:
@@ -192,6 +195,13 @@ int lcz_lwm2m_client_set_server_url(uint16_t server_inst, char *url, uint8_t len
 		ret = -EINVAL;
 		goto exit;
 	}
+
+#if defined(CONFIG_LCZ_LWM2M_CLIENT_ENABLE_ATTRIBUTES)
+	ret = attr_set_string(ATTR_ID_lwm2m_server_url, (char const *)server_url, server_url_len);
+	if (ret < 0) {
+		goto exit;
+	}
+#endif
 	LOG_INF("Server URL: %s", log_strdup(server_url));
 
 exit:
@@ -200,26 +210,63 @@ exit:
 
 int lcz_lwm2m_client_set_security_mode(uint16_t server_inst, lcz_lwm2m_client_security_mode_t mode)
 {
+	int ret;
 	char obj_path[LWM2M_MAX_PATH_STR_LEN];
 
 	snprintk(obj_path, sizeof(obj_path), "0/%d/2", server_inst);
-	return lwm2m_engine_set_u8(obj_path, mode);
+	ret = lwm2m_engine_set_u8(obj_path, mode);
+	if (ret < 0) {
+		goto exit;
+	}
+#if defined(CONFIG_LCZ_LWM2M_CLIENT_ENABLE_ATTRIBUTES)
+	ret = attr_set(ATTR_ID_lwm2m_security, ATTR_TYPE_U8, &mode,
+		       sizeof(lcz_lwm2m_client_security_mode_t), NULL);
+	if (ret < 0) {
+		goto exit;
+	}
+#endif
+exit:
+	return ret;
 }
 
 int lcz_lwm2m_client_set_key_or_id(uint16_t server_inst, uint8_t *value, uint16_t value_len)
 {
+	int ret;
 	char obj_path[LWM2M_MAX_PATH_STR_LEN];
 
 	snprintk(obj_path, sizeof(obj_path), "0/%d/3", server_inst);
-	return lwm2m_engine_set_opaque(obj_path, value, value_len);
+	ret = lwm2m_engine_set_opaque(obj_path, value, value_len);
+	if (ret < 0) {
+		goto exit;
+	}
+#if defined(CONFIG_LCZ_LWM2M_CLIENT_ENABLE_ATTRIBUTES)
+	ret = attr_set_string(ATTR_ID_lwm2m_psk_id, (char const *)value, value_len);
+	if (ret < 0) {
+		goto exit;
+	}
+#endif
+exit:
+	return ret;
 }
 
 int lcz_lwm2m_client_set_secret_key(uint16_t server_inst, uint8_t *value, uint16_t value_len)
 {
+	int ret;
 	char obj_path[LWM2M_MAX_PATH_STR_LEN];
 
 	snprintk(obj_path, sizeof(obj_path), "0/%d/5", server_inst);
-	return lwm2m_engine_set_opaque(obj_path, value, value_len);
+	ret = lwm2m_engine_set_opaque(obj_path, value, value_len);
+	if (ret < 0) {
+		goto exit;
+	}
+#if defined(CONFIG_LCZ_LWM2M_CLIENT_ENABLE_ATTRIBUTES)
+	ret = attr_set_byte_array(ATTR_ID_lwm2m_psk, (char const *)value, value_len);
+	if (ret < 0) {
+		goto exit;
+	}
+#endif
+exit:
+	return ret;
 }
 
 int lcz_lwm2m_client_set_bootstrap(uint16_t server_inst, bool enable, uint16_t short_server_id)
@@ -227,14 +274,26 @@ int lcz_lwm2m_client_set_bootstrap(uint16_t server_inst, bool enable, uint16_t s
 	int ret;
 	char obj_path[LWM2M_MAX_PATH_STR_LEN];
 
-	if (enable) {
-		/* Mark 1st instance of security object as a bootstrap server */
-		snprintk(obj_path, sizeof(obj_path), "0/%d/1", server_inst);
-		ret = lwm2m_engine_set_u8(obj_path, 1);
-		if (ret < 0) {
-			goto exit;
-		}
+	if (enable && !IS_ENABLED(CONFIG_LCZ_LWM2M_RD_CLIENT_SUPPORT_BOOTSTRAP)) {
+		LOG_ERR("Bootstrap support not enabled");
+		ret = -ENOTSUP;
+		goto exit;
+	}
 
+	snprintk(obj_path, sizeof(obj_path), "0/%d/1", server_inst);
+	ret = lwm2m_engine_set_u8(obj_path, (uint8_t)enable);
+	if (ret < 0) {
+		goto exit;
+	}
+
+#if defined(CONFIG_LCZ_LWM2M_CLIENT_ENABLE_ATTRIBUTES)
+	ret = attr_set(ATTR_ID_lwm2m_bootstrap, ATTR_TYPE_BOOL, &enable, sizeof(bool), NULL);
+	if (ret < 0) {
+		goto exit;
+	}
+#endif
+
+	if (enable) {
 		/* Create 2nd instance of security object needed for bootstrap */
 		snprintk(obj_path, sizeof(obj_path), "0/%d", server_inst + 1);
 		ret = lwm2m_engine_create_obj_inst(obj_path);
@@ -242,14 +301,7 @@ int lcz_lwm2m_client_set_bootstrap(uint16_t server_inst, bool enable, uint16_t s
 			goto exit;
 		}
 	} else {
-		/* indicate non-bootstrap server */
-		snprintk(obj_path, sizeof(obj_path), "0/%d/1", server_inst);
-		ret = lwm2m_engine_set_u8(obj_path, 0);
-		if (ret < 0) {
-			goto exit;
-		}
-
-		/* delete second security instance because it is not needed */
+		/* Delete second security instance because it is not needed */
 		snprintk(obj_path, sizeof(obj_path), "0/%d", server_inst + 1);
 		lwm2m_engine_create_obj_inst(obj_path);
 
@@ -266,6 +318,13 @@ int lcz_lwm2m_client_set_bootstrap(uint16_t server_inst, bool enable, uint16_t s
 		if (ret < 0) {
 			goto exit;
 		}
+#if defined(CONFIG_LCZ_LWM2M_CLIENT_ENABLE_ATTRIBUTES)
+		ret = attr_set(ATTR_ID_lwm2m_short_id, ATTR_TYPE_U16, &short_server_id,
+			       sizeof(uint16_t), NULL);
+		if (ret < 0) {
+			goto exit;
+		}
+#endif
 	}
 	lwc.bootstrap_enabled = enable;
 exit:
@@ -317,6 +376,10 @@ int lcz_lwm2m_client_connect(char *endpoint_name, lcz_lwm2m_client_transport_t t
 		}
 
 		lwm2m_rd_client_start(&lwc.client, endpoint_name, flags, rd_client_event, NULL);
+#if defined(CONFIG_LCZ_LWM2M_CLIENT_ENABLE_ATTRIBUTES)
+		(void)attr_set_string(ATTR_ID_lwm2m_endpoint, (char const *)endpoint_name,
+				      strlen(endpoint_name));
+#endif
 		lwc.connection_started = true;
 	}
 
@@ -349,76 +412,74 @@ static int lcz_lwm2m_client_init(const struct device *device)
 	char *server_url;
 	lcz_lwm2m_client_security_mode_t sec_mode;
 	char *psk_id;
-	char *psk;
+	uint8_t *psk;
+#if defined(CONFIG_LCZ_LWM2M_CLIENT_INIT_KCONFIG)
 	uint8_t psk_bin[CONFIG_LCZ_LWM2M_SECURITY_KEY_SIZE];
+#endif
+#endif
 	bool bootstrap;
 	uint16_t short_server_id;
-#endif
 
 	ARG_UNUSED(device);
 
 	lcz_lwm2m_client_register_reboot_callback(device_reboot_cb);
 
 #if defined(CONFIG_LCZ_LWM2M_TRANSPORT_UDP)
-#if defined(CONFIG_LCZ_LWM2M_SERVER_URL)
+#if defined(CONFIG_LCZ_LWM2M_CLIENT_INIT_KCONFIG)
 	server_url = CONFIG_LCZ_LWM2M_SERVER_URL;
+	sec_mode = (lcz_lwm2m_client_security_mode_t)CONFIG_LCZ_LWM2M_SECURITY_MODE;
+	psk_id = CONFIG_LCZ_LWM2M_PSK_ID;
+	ret = hex2bin(CONFIG_LCZ_LWM2M_PSK, strlen(CONFIG_LCZ_LWM2M_PSK), psk_bin, sizeof(psk_bin));
+	if (ret == 0 || ret != sizeof(psk_bin)) {
+		LOG_ERR("Could not convert PSK to binary");
+		goto exit;
+	}
+	psk = psk_bin;
 #else
-	/* this is a placeholder for a future runtime setting */
-	server_url = "my.lwm2m.com:5843";
+	server_url = (char *)attr_get_quasi_static(ATTR_ID_lwm2m_server_url);
+	ret = attr_get(ATTR_ID_lwm2m_security, &sec_mode, sizeof(sec_mode));
+	if (ret < 0) {
+		goto exit;
+	}
+	psk_id = (char *)attr_get_quasi_static(ATTR_ID_lwm2m_psk_id);
+	psk = (uint8_t *)attr_get_quasi_static(ATTR_ID_lwm2m_psk);
+
 #endif
 	ret = lcz_lwm2m_client_set_server_url(0, server_url, strlen(server_url));
 	if (ret < 0) {
 		goto exit;
 	}
 
-#if defined(CONFIG_LCZ_LWM2M_SECURITY_MODE)
-	sec_mode = (lcz_lwm2m_client_security_mode_t)CONFIG_LCZ_LWM2M_SECURITY_MODE;
-#else
-	/* this is a placeholder for a future runtime setting */
-	sec_mode = LCZ_LWM2M_CLIENT_SECURITY_MODE_NO_SEC;
-#endif
 	ret = lcz_lwm2m_client_set_security_mode(0, sec_mode);
 	if (ret < 0) {
 		goto exit;
 	}
 
 	if (sec_mode == LCZ_LWM2M_CLIENT_SECURITY_MODE_PSK) {
-#if defined(CONFIG_LCZ_LWM2M_PSK_ID)
-		psk_id = CONFIG_LCZ_LWM2M_PSK_ID;
-#else
-		/* this is a placeholder for a future runtime setting */
-		psk_id = "psk_id";
-#endif
 		ret = lcz_lwm2m_client_set_key_or_id(0, psk_id, strlen(psk_id));
 		if (ret < 0) {
 			goto exit;
 		}
 
-#if defined(CONFIG_LCZ_LWM2M_PSK)
-		psk = CONFIG_LCZ_LWM2M_PSK;
-#else
-		/* this is a placeholder for a future runtime setting */
-		psk = "000102030405060708090a0b0c0d0e0f";
-#endif
-		ret = hex2bin((const char *)psk, strlen(psk), psk_bin, sizeof(psk_bin));
-		if (ret == 0 || ret != sizeof(psk_bin)) {
-			LOG_ERR("Could not convert PSK to binary");
-			goto exit;
-		}
-		ret = lcz_lwm2m_client_set_secret_key(0, psk_bin, sizeof(psk_bin));
+		ret = lcz_lwm2m_client_set_secret_key(0, psk, sizeof(psk));
 		if (ret < 0) {
 			goto exit;
 		}
 	}
 #endif /* CONFIG_LCZ_LWM2M_TRANSPORT_UDP */
 
-#if defined(CONFIG_LCZ_LWM2M_BOOTSTRAP)
+#if defined(CONFIG_LCZ_LWM2M_CLIENT_INIT_KCONFIG)
 	bootstrap = (bool)CONFIG_LCZ_LWM2M_BOOTSTRAP_SETTING;
 	short_server_id = CONFIG_LCZ_LWM2M_SHORT_SERVER_ID;
 #else
-	/* this is a placeholder for a future runtime setting */
-	bootstrap = false;
-	short_server_id = 1;
+	ret = attr_get(ATTR_ID_lwm2m_bootstrap, &bootstrap, sizeof(bootstrap));
+	if (ret < 0) {
+		goto exit;
+	}
+	ret = attr_get(ATTR_ID_lwm2m_short_id, &short_server_id, sizeof(short_server_id));
+	if (ret < 0) {
+		goto exit;
+	}
 #endif
 	ret = lcz_lwm2m_client_set_bootstrap(0, bootstrap, short_server_id);
 	if (ret < 0) {

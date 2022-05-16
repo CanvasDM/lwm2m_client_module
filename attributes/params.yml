@@ -1,0 +1,128 @@
+---
+lwm2m_server_url:
+  name: lwm2m_server_url
+  required: true
+  schema:
+    maxLength: 255
+    minLength: 11 # coap://1.io
+    type: string
+    x-ctype: string
+    pattern: coaps?://(\.?|\w|[-|_])+([\.|/]((\w|[0-9]|[-|_])*))+(\:[0-9]{1,5})?
+  x-broadcast: true
+  x-default: coap://leshan.eclipseprojects.io:5683
+  x-example: coaps://leshan.eclipseprojects.io:5784
+  x-lockable: true
+  x-prepare: false
+  x-readable: true
+  x-savable: true
+  x-writable: true
+  summary: Server URL to connect to
+lwm2m_endpoint:
+  name: lwm2m_endpoint
+  required: true
+  schema:
+    maxLength: 32
+    minLength: 1
+    type: string
+    x-ctype: string
+  x-broadcast: true
+  x-default: my_device
+  x-lockable: true
+  x-prepare: false
+  x-readable: true
+  x-savable: true
+  x-writable: true
+  summary: Endpoint name to identify the device
+lwm2m_security:
+  name: lwm2m_security
+  required: true
+  schema:
+    maximum: 32
+    minimum: 1
+    type: integer
+    enum:
+      LWM2M_SEC_PSK: 0
+      LWM2M_SEC_RPK: 1
+      LWM2M_SEC_CERT: 2
+      LWM2M_SEC_NO_SEC: 3
+      LWM2M_SEC_CERT_EST: 4
+    x-ctype: uint8_t
+  x-broadcast: true
+  x-default: 3
+  x-example: 0
+  x-lockable: true
+  x-prepare: false
+  x-readable: true
+  x-savable: true
+  x-writable: true
+  summary: "LwM2M Security mode"
+lwm2m_psk_id:
+  name: lwm2m_psk_id
+  required: true
+  schema:
+    maxLength: 32
+    minLength: 1
+    type: string
+    x-ctype: string
+  x-broadcast: true
+  x-default: my_device
+  x-example: my_device
+  x-lockable: true
+  x-prepare: false
+  x-readable: true
+  x-savable: true
+  x-writable: true
+  summary: PSK ID
+lwm2m_psk:
+  name: lwm2m_psk
+  required: true
+  schema:
+    maxItems: 16
+    minItems: 16
+    type: array
+    x-ctype: uint8_t
+  x-broadcast: true
+  x-array-size: 16
+  x-default: "{ 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f }"
+  x-lockable: true
+  x-prepare: false
+  x-readable: true
+  x-savable: true
+  x-writable: true
+  summary: Pre-shared key
+lwm2m_bootstrap:
+  name: lwm2m_bootstrap
+  required: true
+  schema:
+    maximum: 1
+    minimum: 0
+    type: integer
+    x-ctype: bool
+  x-broadcast: true
+  x-default: 0
+  x-example: 0
+  x-lockable: true
+  x-prepare: false
+  x-readable: true
+  x-savable: true
+  x-writable: true
+  summary: 0 - disabled bootstrap, 1 - enabled
+lwm2m_short_id:
+  name: lwm2m_short_id
+  required: true
+  schema:
+    maximum: 65534
+    minimum: 1
+    type: integer
+    x-ctype: uint16_t
+  x-broadcast: true
+  x-default: 1
+  x-example: 101
+  x-lockable: true
+  x-prepare: false
+  x-readable: true
+  x-savable: true
+  x-writable: true
+  summary: "short_server_id This identifier uniquely identifies each LwM2M Server configured for
+    the LwM2M Client. This Resource MUST be set when the Bootstrap-Server Resource has a value of
+    'false'."

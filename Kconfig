@@ -34,19 +34,42 @@ config LCZ_LWM2M_CLIENT_REBOOT_DELAY_SECONDS
 	  (lcz_lwm2m_client_register_reboot_callback), this is the delay
 	  used before a reboot is initiated.
 
-menuconfig LCZ_LWM2M_CLIENT_SETTINGS
-	bool "LwM2M Client Settings"
+config LCZ_LWM2M_CLIENT_ENABLE_ATTRIBUTES
+	bool "Enable attributes"
+	depends on ATTR
+	help
+	  Enable attributes system for LwM2M client settings.
 
-if LCZ_LWM2M_CLIENT_SETTINGS
+choice
+	prompt "Client init mode"
+	default LCZ_LWM2M_CLIENT_INIT_KCONFIG
+
+config LCZ_LWM2M_CLIENT_INIT_KCONFIG
+	bool "Kconfig"
+	help
+	  Use Kconfig settings to init client.
+
+config LCZ_LWM2M_CLIENT_INIT_ATTRIBUTES
+	bool "Attributes"
+	depends on ATTR
+	select LCZ_LWM2M_CLIENT_ENABLE_ATTRIBUTES
+	help
+	  Use attributes system to init client.
+
+endchoice
+
+if LCZ_LWM2M_CLIENT_INIT_KCONFIG
 
 if LCZ_LWM2M_TRANSPORT_UDP
 
 config LCZ_LWM2M_SERVER_URL
 	string "Server URL"
+	default "coap://lwm2m.com"
 
 config LCZ_LWM2M_SECURITY_MODE
 	int "Security mode"
 	range 0 4
+	default 3
 	help
 	  0 - PSK
 	  1 - RPK
@@ -62,20 +85,19 @@ config LCZ_LWM2M_TLS_TAG
 
 config LCZ_LWM2M_PSK_ID
 	string "PSK ID"
+	default "my_psk"
 	help
 	  Pre-shared key identity
 
 config LCZ_LWM2M_PSK
 	string "PSK"
+	default "000102030405060708090a0b0c0d0e0f"
 	help
 	  PSK as a HEX string. This string will be converted to binary and
 	  used as the PSK.
 	  Length of this string needs to be LCZ_LWM2M_SECURITY_KEY_SIZE.
 
-config LCZ_LWM2M_BOOTSTRAP
-	bool "Enable bootstrap"
-
-if LCZ_LWM2M_BOOTSTRAP
+endif # LCZ_LWM2M_TRANSPORT_UDP
 
 config LCZ_LWM2M_BOOTSTRAP_SETTING
 	int "Bootstrap setting"
@@ -87,14 +109,9 @@ config LCZ_LWM2M_BOOTSTRAP_SETTING
 
 config LCZ_LWM2M_SHORT_SERVER_ID
 	int "Short server ID"
-	depends on LCZ_LWM2M_BOOTSTRAP
 	range 1 65534
 	default 1
 
-endif # LCZ_LWM2M_BOOTSTRAP
-
-endif # LCZ_LWM2M_TRANSPORT_UDP
-
-endif # LCZ_LWM2M_CLIENT_SETTINGS
+endif # LCZ_LWM2M_CLIENT_INIT_KCONFIG
 
 endif # LCZ_LWM2M_CLIENT

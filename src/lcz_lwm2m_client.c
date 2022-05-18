@@ -401,6 +401,177 @@ bool lcz_lwm2m_client_is_connected(void)
 	return lwc.connected;
 }
 
+int lcz_lwm2m_client_set_device_manufacturer(char *value)
+{
+	int ret;
+
+#if defined(CONFIG_LCZ_LWM2M_CLIENT_ENABLE_ATTRIBUTES)
+	ret = attr_set_string(ATTR_ID_lwm2m_mfg, (char const *)value, strlen(value));
+	if (ret < 0) {
+		goto exit;
+	}
+#endif
+	ret = lwm2m_engine_set_res_data("3/0/0", value, strlen(value) + 1, LWM2M_RES_DATA_FLAG_RO);
+exit:
+	return ret;
+}
+
+int lcz_lwm2m_client_set_device_model_number(char *value)
+{
+	int ret;
+
+#if defined(CONFIG_LCZ_LWM2M_CLIENT_ENABLE_ATTRIBUTES)
+	ret = attr_set_string(ATTR_ID_lwm2m_mn, (char const *)value, strlen(value));
+	if (ret < 0) {
+		goto exit;
+	}
+#endif
+	ret = lwm2m_engine_set_res_data("3/0/1", value, strlen(value) + 1, LWM2M_RES_DATA_FLAG_RO);
+exit:
+	return ret;
+}
+
+int lcz_lwm2m_client_set_device_serial_number(char *value)
+{
+	int ret;
+
+#if defined(CONFIG_LCZ_LWM2M_CLIENT_ENABLE_ATTRIBUTES)
+	ret = attr_set_string(ATTR_ID_lwm2m_sn, (char const *)value, strlen(value));
+	if (ret < 0) {
+		goto exit;
+	}
+#endif
+	ret = lwm2m_engine_set_res_data("3/0/2", value, strlen(value) + 1, LWM2M_RES_DATA_FLAG_RO);
+exit:
+	return ret;
+}
+
+int lcz_lwm2m_client_set_device_firmware_version(char *value)
+{
+	int ret;
+
+#if defined(CONFIG_LCZ_LWM2M_CLIENT_ENABLE_ATTRIBUTES)
+	ret = attr_set_string(ATTR_ID_lwm2m_fw_ver, (char const *)value, strlen(value));
+	if (ret < 0) {
+		goto exit;
+	}
+#endif
+	ret = lwm2m_engine_set_res_data("3/0/3", value, strlen(value) + 1, LWM2M_RES_DATA_FLAG_RO);
+exit:
+	return ret;
+}
+
+int lcz_lwm2m_client_set_available_power_source(uint16_t res_inst,
+						lcz_lwm2m_client_device_power_source_t *src)
+{
+	int ret;
+	char obj_path[LWM2M_MAX_PATH_STR_LEN];
+	uint8_t data;
+	uint16_t data_len;
+	uint8_t *data_ptr;
+	uint8_t flags;
+
+	snprintk(obj_path, sizeof(obj_path), "3/0/6/%d", res_inst);
+
+	data_len = sizeof(data);
+	data_ptr = &data;
+	ret = lwm2m_engine_get_res_data(obj_path, (void **)&data_ptr, &data_len, &flags);
+	if (ret < 0) {
+		(void)lwm2m_engine_create_res_inst(obj_path);
+	}
+
+#if defined(CONFIG_LCZ_LWM2M_CLIENT_ENABLE_ATTRIBUTES)
+	if (res_inst == 0) {
+		ret = attr_set_uint32(ATTR_ID_lwm2m_pwr_src, *src);
+		if (ret < 0) {
+			goto exit;
+		}
+	}
+#endif
+	ret = lwm2m_engine_set_res_data(obj_path, src, sizeof(uint8_t), LWM2M_RES_DATA_FLAG_RO);
+
+exit:
+	return ret;
+}
+
+int lcz_lwm2m_client_set_power_source_voltage(uint16_t res_inst, int32_t *millivolts)
+{
+	int ret;
+	char obj_path[LWM2M_MAX_PATH_STR_LEN];
+	uint8_t data;
+	uint16_t data_len;
+	uint8_t *data_ptr;
+	uint8_t flags;
+
+	snprintk(obj_path, sizeof(obj_path), "3/0/7/%d", res_inst);
+
+	data_len = sizeof(data);
+	data_ptr = &data;
+	ret = lwm2m_engine_get_res_data(obj_path, (void **)&data_ptr, &data_len, &flags);
+	if (ret < 0) {
+		(void)lwm2m_engine_create_res_inst(obj_path);
+	}
+
+#if defined(CONFIG_LCZ_LWM2M_CLIENT_ENABLE_ATTRIBUTES)
+	if (res_inst == 0) {
+		ret = attr_set_signed32(ATTR_ID_lwm2m_pwr_src_volt, *millivolts);
+		if (ret < 0) {
+			goto exit;
+		}
+	}
+#endif
+	ret = lwm2m_engine_set_res_data(obj_path, millivolts, sizeof(int32_t),
+					LWM2M_RES_DATA_FLAG_RO);
+exit:
+	return ret;
+}
+
+int lcz_lwm2m_client_set_software_version(char *value)
+{
+	int ret;
+
+#if defined(CONFIG_LCZ_LWM2M_CLIENT_ENABLE_ATTRIBUTES)
+	ret = attr_set_string(ATTR_ID_lwm2m_sw_ver, (char const *)value, strlen(value));
+	if (ret < 0) {
+		goto exit;
+	}
+#endif
+	ret = lwm2m_engine_set_res_data("3/0/19", value, strlen(value) + 1, LWM2M_RES_DATA_FLAG_RO);
+exit:
+	return ret;
+}
+
+int lcz_lwm2m_client_set_hardware_version(char *value)
+{
+	int ret;
+
+#if defined(CONFIG_LCZ_LWM2M_CLIENT_ENABLE_ATTRIBUTES)
+	ret = attr_set_string(ATTR_ID_lwm2m_hw_ver, (char const *)value, strlen(value));
+	if (ret < 0) {
+		goto exit;
+	}
+#endif
+	ret = lwm2m_engine_set_res_data("3/0/18", value, strlen(value) + 1, LWM2M_RES_DATA_FLAG_RO);
+exit:
+	return ret;
+}
+
+int lcz_lwm2m_client_set_battery_status(lcz_lwm2m_client_device_battery_status_t *status)
+{
+	int ret;
+#if defined(CONFIG_LCZ_LWM2M_CLIENT_ENABLE_ATTRIBUTES)
+	ret = attr_set_uint32(ATTR_ID_lwm2m_batt_stat, *status);
+	if (ret < 0) {
+		goto exit;
+	}
+
+#endif
+
+	ret = lwm2m_engine_set_res_data("3/0/20", status, sizeof(uint8_t), LWM2M_RES_DATA_FLAG_RO);
+exit:
+	return ret;
+}
+
 SYS_INIT(lcz_lwm2m_client_init, APPLICATION, CONFIG_LCZ_LWM2M_CLIENT_INIT_PRIORITY);
 /**************************************************************************************************/
 /* SYS INIT                                                                                       */
@@ -419,6 +590,27 @@ static int lcz_lwm2m_client_init(const struct device *device)
 #endif
 	bool bootstrap;
 	uint16_t short_server_id;
+#if !defined(CONFIG_LCZ_LWM2M_CLIENT_DEVICE_NO_INIT)
+	char *mfg;
+	char *mn;
+	char *sn;
+	char *fw_ver;
+	char *sw_ver;
+	char *hw_ver;
+	lcz_lwm2m_client_device_power_source_t *pwr_src_ptr;
+	int32_t *pwr_src_v_ptr;
+	lcz_lwm2m_client_device_battery_status_t *batt_stat_ptr;
+#if defined(CONFIG_LCZ_LWM2M_CLIENT_DEVICE_INIT_KCONFIG)
+	static lcz_lwm2m_client_device_power_source_t pwr_src;
+	static int32_t pwr_src_v;
+	static lcz_lwm2m_client_device_battery_status_t batt_stat;
+	pwr_src_ptr = &pwr_src;
+	pwr_src_v_ptr = &pwr_src_v;
+	batt_stat_ptr = &batt_stat;
+#else
+	int val_len;
+#endif
+#endif
 
 	ARG_UNUSED(device);
 
@@ -485,6 +677,76 @@ static int lcz_lwm2m_client_init(const struct device *device)
 	if (ret < 0) {
 		goto exit;
 	}
+
+#if !defined(CONFIG_LCZ_LWM2M_CLIENT_DEVICE_NO_INIT)
+#if defined(CONFIG_LCZ_LWM2M_CLIENT_DEVICE_INIT_KCONFIG)
+	mfg = CONFIG_LCZ_LWM2M_CLIENT_DEVICE_MFG;
+	mn = CONFIG_LCZ_LWM2M_CLIENT_DEVICE_MN;
+	sn = CONFIG_LCZ_LWM2M_CLIENT_DEVICE_SN;
+	fw_ver = CONFIG_LCZ_LWM2M_CLIENT_DEVICE_FW_VER;
+	pwr_src = (lcz_lwm2m_client_device_power_source_t)CONFIG_LCZ_LWM2M_CLIENT_DEVICE_PWR_SRC;
+	pwr_src_v = CONFIG_LCZ_LWM2M_CLIENT_DEVICE_PWR_SRC_VOLT;
+	sw_ver = CONFIG_LCZ_LWM2M_CLIENT_DEVICE_SW_VER;
+	hw_ver = CONFIG_LCZ_LWM2M_CLIENT_DEVICE_HW_VER;
+	batt_stat =
+		(lcz_lwm2m_client_device_battery_status_t)CONFIG_LCZ_LWM2M_CLIENT_DEVICE_BATT_STAT;
+#else
+	mfg = (char *)attr_get_quasi_static(ATTR_ID_lwm2m_mfg);
+	mn = (char *)attr_get_quasi_static(ATTR_ID_lwm2m_mn);
+	sn = (char *)attr_get_quasi_static(ATTR_ID_lwm2m_sn);
+	fw_ver = (char *)attr_get_quasi_static(ATTR_ID_lwm2m_fw_ver);
+	pwr_src_ptr = attr_get_pointer(ATTR_ID_lwm2m_pwr_src, &val_len);
+	if (pwr_src_ptr == NULL) {
+		goto exit;
+	}
+	pwr_src_v_ptr = attr_get_pointer(ATTR_ID_lwm2m_pwr_src_volt, &val_len);
+	if (pwr_src_v_ptr == NULL) {
+		goto exit;
+	}
+	sw_ver = (char *)attr_get_quasi_static(ATTR_ID_lwm2m_sw_ver);
+	hw_ver = (char *)attr_get_quasi_static(ATTR_ID_lwm2m_hw_ver);
+	batt_stat_ptr = attr_get_pointer(ATTR_ID_lwm2m_batt_stat, &val_len);
+	if (batt_stat_ptr == NULL) {
+		goto exit;
+	}
+#endif /* CONFIG_LCZ_LWM2M_CLIENT_DEVICE_INIT_KCONFIG */
+	ret = lcz_lwm2m_client_set_device_manufacturer(mfg);
+	if (ret < 0) {
+		goto exit;
+	}
+	ret = lcz_lwm2m_client_set_device_model_number(mn);
+	if (ret < 0) {
+		goto exit;
+	}
+	ret = lcz_lwm2m_client_set_device_serial_number(sn);
+	if (ret < 0) {
+		goto exit;
+	}
+	ret = lcz_lwm2m_client_set_device_firmware_version(fw_ver);
+	if (ret < 0) {
+		goto exit;
+	}
+	ret = lcz_lwm2m_client_set_available_power_source(0, pwr_src_ptr);
+	if (ret < 0) {
+		goto exit;
+	}
+	ret = lcz_lwm2m_client_set_power_source_voltage(0, pwr_src_v_ptr);
+	if (ret < 0) {
+		goto exit;
+	}
+	ret = lcz_lwm2m_client_set_software_version(sw_ver);
+	if (ret < 0) {
+		goto exit;
+	}
+	ret = lcz_lwm2m_client_set_hardware_version(hw_ver);
+	if (ret < 0) {
+		goto exit;
+	}
+	ret = lcz_lwm2m_client_set_battery_status(batt_stat_ptr);
+	if (ret < 0) {
+		goto exit;
+	}
+#endif /* !CONFIG_LCZ_LWM2M_CLIENT_DEVICE_NO_INIT */
 
 	LOG_DBG("LwM2M client initialized");
 exit:

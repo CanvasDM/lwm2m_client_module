@@ -114,4 +114,108 @@ config LCZ_LWM2M_SHORT_SERVER_ID
 
 endif # LCZ_LWM2M_CLIENT_INIT_KCONFIG
 
+choice
+	prompt "Device settings init mode"
+	default LCZ_LWM2M_CLIENT_DEVICE_NO_INIT
+	help
+	  Init object 3 device settings
+
+config LCZ_LWM2M_CLIENT_DEVICE_NO_INIT
+	bool "Do not init"
+	help
+	  Do not init device settings. Use this option to not init optional
+	  device (object 3) settings. This saves RAM.
+
+config LCZ_LWM2M_CLIENT_DEVICE_INIT_KCONFIG
+	bool "Kconfig"
+	help
+	  Use Kconfig settings to init device settings.
+
+config LCZ_LWM2M_CLIENT_DEVICE_INIT_ATTRIBUTES
+	bool "Attributes"
+	depends on ATTR
+	select LCZ_LWM2M_CLIENT_ENABLE_ATTRIBUTES
+	help
+	  Use attributes system to init device settings.
+
+endchoice
+
+if LCZ_LWM2M_CLIENT_DEVICE_INIT_KCONFIG
+
+config LCZ_LWM2M_CLIENT_DEVICE_MFG
+	string "Manufacturer"
+	default "Laird Connectivity"
+	help
+	  Device manufacturer
+
+config LCZ_LWM2M_CLIENT_DEVICE_MN
+	string "Model number"
+	default "MG100"
+	help
+	  Device model number
+
+config LCZ_LWM2M_CLIENT_DEVICE_SN
+	string "Serial number"
+	default "SN0001"
+	help
+	  Device serial number
+
+config LCZ_LWM2M_CLIENT_DEVICE_FW_VER
+	string "Firmware version"
+	default "0.0.0"
+	help
+	  Device firmware version
+
+config LCZ_LWM2M_CLIENT_DEVICE_PWR_SRC
+	int "Power source"
+	range 0 7
+	default 0
+	help
+	  Device power source. This sets resource 6 instance 0 (3/0/6/0).
+	  Other instances need to be managed at runtime.
+	  0: DC power
+	  1: Internal Battery
+	  2: External Battery
+	  3: Fuel Cell
+	  4: Power over Ethernet
+	  5: USB
+	  6: AC (Mains) power
+	  7: Solar
+
+config LCZ_LWM2M_CLIENT_DEVICE_PWR_SRC_VOLT
+	int "Power source voltage"
+	default 0
+	help
+	  Device power source voltage in millivolts (mV). This sets
+	  resource 7 instance 0 (3/0/7/0).
+	  Other instances need to be managed at runtime.
+
+config LCZ_LWM2M_CLIENT_DEVICE_SW_VER
+	string "Software version"
+	default "0.0.0"
+	help
+	  Device software version
+
+config LCZ_LWM2M_CLIENT_DEVICE_HW_VER
+	string "Hardware version"
+	default "0.0.0"
+	help
+	  Device hardware version
+
+config LCZ_LWM2M_CLIENT_DEVICE_BATT_STAT
+	int "Battery status"
+	range 0 6
+	default 6
+	help
+	  Device battery status:
+	  0 Normal - The battery is operating normally and not on power.
+	  1 Charging - The battery is currently charging.
+	  2 Charge Complete - The battery is fully charged and still on power.
+	  3 Damaged - The battery has some problem.
+	  4 Low Battery - The battery is low on charge.
+	  5 Not Installed - The battery is not installed.
+	  6 Unknown - The battery information is not available.
+
+endif # LCZ_LWM2M_CLIENT_DEVICE_INIT_KCONFIG
+
 endif # LCZ_LWM2M_CLIENT

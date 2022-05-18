@@ -38,6 +38,27 @@ typedef enum lcz_lwm2m_client_transport {
 	LCZ_LWM2M_CLIENT_TRANSPORT_BLE,
 } lcz_lwm2m_client_transport_t;
 
+typedef enum lcz_lwm2m_client_device_power_source {
+	LCZ_LWM2M_CLIENT_DEV_PWR_SRC_DC = 0,
+	LCZ_LWM2M_CLIENT_DEV_PWR_SRC_INT_BATT,
+	LCZ_LWM2M_CLIENT_DEV_PWR_SRC_EXT_BATT,
+	LCZ_LWM2M_CLIENT_DEV_PWR_SRC_FUEL_CELL,
+	LCZ_LWM2M_CLIENT_DEV_PWR_SRC_POE,
+	LCZ_LWM2M_CLIENT_DEV_PWR_SRC_USB,
+	LCZ_LWM2M_CLIENT_DEV_PWR_SRC_AC,
+	LCZ_LWM2M_CLIENT_DEV_PWR_SRC_SOLAR,
+} lcz_lwm2m_client_device_power_source_t;
+
+typedef enum lcz_lwm2m_client_device_battery_status {
+	LCZ_LWM2M_CLIENT_DEV_BATT_STAT_NORMAL = 0,
+	LCZ_LWM2M_CLIENT_DEV_BATT_STAT_CHARGING,
+	LCZ_LWM2M_CLIENT_DEV_BATT_STAT_CHARGE_COMPLETE,
+	LCZ_LWM2M_CLIENT_DEV_BATT_STAT_DAMAGED,
+	LCZ_LWM2M_CLIENT_DEV_BATT_STAT_LOW,
+	LCZ_LWM2M_CLIENT_DEV_BATT_STAT_NOT_INSTALLED,
+	LCZ_LWM2M_CLIENT_DEV_BATT_STAT_UNKNOWN,
+} lcz_lwm2m_client_device_battery_status_t;
+
 typedef void (*lcz_lwm2m_client_connected_cb_t)(bool connected,
 						enum lwm2m_rd_client_event client_event);
 
@@ -149,6 +170,81 @@ int lcz_lwm2m_client_disconnect(bool deregister);
  * @return false LwM2M clients is NOT connected
  */
 bool lcz_lwm2m_client_is_connected(void);
+
+/**
+ * @brief Set manufacturer
+ *
+ * @param value string value
+ * @return int 0 on success, < 0 on error
+ */
+int lcz_lwm2m_client_set_device_manufacturer(char *value);
+
+/**
+ * @brief Set model number
+ *
+ * @param value string value
+ * @return int 0 on success, < 0 on error
+ */
+int lcz_lwm2m_client_set_device_model_number(char *value);
+
+/**
+ * @brief Set serial number
+ *
+ * @param value string value
+ * @return int 0 on success, < 0 on error
+ */
+int lcz_lwm2m_client_set_device_serial_number(char *value);
+
+/**
+ * @brief Set firmware version
+ *
+ * @param value string value
+ * @return int 0 on success, < 0 on error
+ */
+int lcz_lwm2m_client_set_device_firmware_version(char *value);
+
+/**
+ * @brief Set power source of device
+ *
+ * @param res_inst resource instance
+ * @param src power source type
+ * @return int 0 on success, < 0 on error
+ */
+int lcz_lwm2m_client_set_available_power_source(uint16_t res_inst,
+						lcz_lwm2m_client_device_power_source_t *src);
+
+/**
+ * @brief Source power source voltage
+ *
+ * @param res_inst resource instance
+ * @param millivolts voltage in millivolts (mV)
+ * @return int 0 on success, < 0 on error
+ */
+int lcz_lwm2m_client_set_power_source_voltage(uint16_t res_inst, int32_t *millivolts);
+
+/**
+ * @brief Set software version
+ *
+ * @param value string value
+ * @return int 0 on success, < 0 on error
+ */
+int lcz_lwm2m_client_set_software_version(char *value);
+
+/**
+ * @brief Set hardware version
+ *
+ * @param value string value
+ * @return int 0 on success, < 0 on error
+ */
+int lcz_lwm2m_client_set_hardware_version(char *value);
+
+/**
+ * @brief Set battery status
+ *
+ * @param status battery status
+ * @return int 0 on success, < 0 on error
+ */
+int lcz_lwm2m_client_set_battery_status(lcz_lwm2m_client_device_battery_status_t *status);
 
 #ifdef __cplusplus
 }

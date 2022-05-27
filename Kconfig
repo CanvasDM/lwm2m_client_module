@@ -58,6 +58,21 @@ config LCZ_LWM2M_CLIENT_INIT_ATTRIBUTES
 
 endchoice
 
+config LCZ_LWM2M_TRANSPORT_BLE_PERIPHERAL
+    bool "Enable transport of LwM2M by a BLE peripheral device"
+	depends on LCZ_BT
+	depends on EVENTFD
+	depends on BT_PERIPHERAL
+	depends on MCUMGR_SMP_BT
+
+if LCZ_LWM2M_TRANSPORT_BLE_PERIPHERAL
+
+config LCZ_LWM2M_TRANSPORT_BLE_SMP_GROUP
+	int "SMP group ID for BLE LwM2M transport"
+	default 5683
+
+endif # LCZ_LWM2M_TRANSPORT_BLE_PERIPHERAL
+
 if LCZ_LWM2M_CLIENT_INIT_KCONFIG
 
 if LCZ_LWM2M_TRANSPORT_UDP

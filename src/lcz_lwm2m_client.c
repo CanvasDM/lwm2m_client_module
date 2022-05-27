@@ -369,10 +369,19 @@ int lcz_lwm2m_client_connect(char *endpoint_name, lcz_lwm2m_client_transport_t t
 		lwc.client.tls_tag = CONFIG_LCZ_LWM2M_CLIENT_TLS_TAG;
 #endif
 
+#if defined(CONFIG_LCZ_LWM2M_TRANSPORT_UDP)
 		if (transport == LCZ_LWM2M_CLIENT_TRANSPORT_UDP) {
 			lwc.client.transport_name = "udp";
-		} else {
-			lwc.client.transport_name = "ble";
+		}
+#endif
+#if defined(CONFIG_LCZ_LWM2M_TRANSPORT_BLE_PERIPHERAL)
+		if (transport == LCZ_LWM2M_CLIENT_TRANSPORT_BLE) {
+			lwc.client.transport_name = "ble_peripheral";
+		}
+#endif
+		if (lwc.client.transport_name == NULL) {
+			LOG_ERR("lcz_lwm2m_client_connect: invalid transport %d for config",
+				transport);
 		}
 
 		lwm2m_rd_client_start(&lwc.client, endpoint_name, flags, rd_client_event, NULL);

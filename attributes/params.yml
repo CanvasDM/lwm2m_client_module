@@ -37,15 +37,15 @@ lwm2m_security:
   name: lwm2m_security
   required: true
   schema:
-    maximum: 32
-    minimum: 1
+    maximum: 4
+    minimum: 0
     type: integer
     enum:
-      LWM2M_SEC_PSK: 0
-      LWM2M_SEC_RPK: 1
-      LWM2M_SEC_CERT: 2
-      LWM2M_SEC_NO_SEC: 3
-      LWM2M_SEC_CERT_EST: 4
+      PSK: 0
+      RPK: 1
+      CERT: 2
+      NO_SEC: 3
+      CERT_EST: 4
     x-ctype: uint8_t
   x-broadcast: true
   x-default: 3
@@ -199,14 +199,14 @@ lwm2m_pwr_src:
     minimum: 0
     type: integer
     enum:
-      LWM2M_PWR_SRC_DC: 0
-      LWM2M_PWR_SRC_INT_BATT: 1
-      LWM2M_PWR_SRC_EXT_BATT: 2
-      LWM2M_PWR_SRC_FUEL_CELL: 3
-      LWM2M_PWR_SRC_POE: 4
-      LWM2M_PWR_SRC_USB: 5
-      LWM2M_PWR_SRC_AC: 6
-      LWM2M_PWR_SRC_SOLAR: 7
+      DC: 0
+      INT_BATT: 1
+      EXT_BATT: 2
+      FUEL_CELL: 3
+      POE: 4
+      USB: 5
+      AC: 6
+      SOLAR: 7
     x-ctype: uint8_t
   x-broadcast: true
   x-default: 0
@@ -276,13 +276,13 @@ lwm2m_batt_stat:
     minimum: 0
     type: integer
     enum:
-      LWM2M_BATT_STAT_NORM: 0
-      LWM2M_BATT_STAT_CHARGING: 1
-      LWM2M_BATT_STAT_CHARGE_COMP: 2
-      LWM2M_BATT_STAT_DAMAGED: 3
-      LWM2M_BATT_STAT_LOW: 4
-      LWM2M_BATT_STAT_NOT_INST: 5
-      LWM2M_BATT_STAT_UNKNOWN: 6
+      NORM: 0
+      CHARGING: 1
+      CHARGE_COMP: 2
+      DAMAGED: 3
+      LOW: 4
+      NOT_INST: 5
+      UNKNOWN: 6
     x-ctype: uint8_t
   x-broadcast: true
   x-default: 6

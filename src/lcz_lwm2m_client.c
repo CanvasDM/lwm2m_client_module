@@ -24,27 +24,30 @@ LOG_MODULE_REGISTER(lcz_lwm2m_client, CONFIG_LCZ_LWM2M_CLIENT_LOG_LEVEL);
 /**************************************************************************************************/
 /* Local Constant, Macro and Type Definitions                                                     */
 /**************************************************************************************************/
+struct lcz_lwm2m_client {
+	struct lwm2m_ctx client;
+	bool bootstrap_enabled;
+	bool connection_started;
+	bool connected;
+};
 
 /**************************************************************************************************/
 /* Local Function Prototypes                                                                      */
 /**************************************************************************************************/
 static int lcz_lwm2m_client_init(const struct device *device);
 static int device_reboot_cb(uint16_t obj_inst_id, uint8_t *args, uint16_t args_len);
-static void set_connected(bool connected, enum lwm2m_rd_client_event client_event);
+static void set_connected(struct lwm2m_ctx *ctx, bool connected,
+			  enum lwm2m_rd_client_event client_event);
 static void rd_client_event(struct lwm2m_ctx *client, enum lwm2m_rd_client_event client_event);
 static void reboot_work_cb(struct k_work *work);
 static void on_lwm2m_event(struct lwm2m_ctx *client, enum lwm2m_rd_client_event client_event);
-static void on_connected_event(bool connected, enum lwm2m_rd_client_event client_event);
+static void on_connected_event(struct lwm2m_ctx *client, bool connected,
+			       enum lwm2m_rd_client_event client_event);
 
 /**************************************************************************************************/
 /* Local Data Definitions                                                                         */
 /**************************************************************************************************/
-static struct {
-	struct lwm2m_ctx client;
-	bool bootstrap_enabled;
-	bool connection_started;
-	bool connected;
-} lwc;
+static struct lcz_lwm2m_client lwc[CONFIG_LCZ_LWM2M_RD_CLIENT_NUM];
 
 static K_WORK_DELAYABLE_DEFINE(reboot_work, reboot_work_cb);
 
@@ -53,6 +56,25 @@ static sys_slist_t lwm2m_event_callback_list = SYS_SLIST_STATIC_INIT(&lwm2m_even
 /**************************************************************************************************/
 /* Local Function Definitions                                                                     */
 /**************************************************************************************************/
+static struct lcz_lwm2m_client *get_lwc_from_ctx(struct lwm2m_ctx *ctx)
+{
+	struct lcz_lwm2m_client *lwc_inst;
+	lwc_inst = CONTAINER_OF(ctx, struct lcz_lwm2m_client, client);
+	return lwc_inst;
+}
+
+static int get_lwm2m_client_index_from_ctx(struct lwm2m_ctx *ctx)
+{
+	int i;
+	for (i = 0; i < CONFIG_LCZ_LWM2M_RD_CLIENT_NUM; i++) {
+		if (&lwc[i].client == ctx) {
+			return i;
+		}
+	}
+	LOG_ERR("did not find lwm2m client for lwm2m_ctx with server_inst %d", ctx->srv_obj_inst);
+	return 0;
+}
+
 static void on_lwm2m_event(struct lwm2m_ctx *client, enum lwm2m_rd_client_event client_event)
 {
 	sys_snode_t *node;
@@ -66,15 +88,17 @@ static void on_lwm2m_event(struct lwm2m_ctx *client, enum lwm2m_rd_client_event 
 	}
 }
 
-static void on_connected_event(bool connected, enum lwm2m_rd_client_event client_event)
+static void on_connected_event(struct lwm2m_ctx *client, bool connected,
+			       enum lwm2m_rd_client_event client_event)
 {
 	sys_snode_t *node;
 	struct lcz_lwm2m_client_event_callback_agent *agent;
 
-	SYS_SLIST_FOR_EACH_NODE(&lwm2m_event_callback_list, node) {
+	SYS_SLIST_FOR_EACH_NODE (&lwm2m_event_callback_list, node) {
 		agent = CONTAINER_OF(node, struct lcz_lwm2m_client_event_callback_agent, node);
 		if (agent->connected_callback != NULL) {
-			agent->connected_callback(connected, client_event);
+			agent->connected_callback(client, get_lwm2m_client_index_from_ctx(client),
+						  connected, client_event);
 		}
 	}
 }
@@ -90,18 +114,23 @@ static int device_reboot_cb(uint16_t obj_inst_id, uint8_t *args, uint16_t args_l
 	ARG_UNUSED(obj_inst_id);
 	ARG_UNUSED(args);
 	ARG_UNUSED(args_len);
+	int i;
 
 	LOG_WRN("Rebooting in %d seconds", CONFIG_LCZ_LWM2M_CLIENT_REBOOT_DELAY_SECONDS);
-	lcz_lwm2m_client_disconnect(lwc.connected);
+	for (i = 0; i < CONFIG_LCZ_LWM2M_RD_CLIENT_NUM; i++) {
+		lcz_lwm2m_client_disconnect(i, lwc[i].connected);
+	}
 	k_work_reschedule(&reboot_work, K_SECONDS(CONFIG_LCZ_LWM2M_CLIENT_REBOOT_DELAY_SECONDS));
 
 	return 0;
 }
 
-static void set_connected(bool connected, enum lwm2m_rd_client_event client_event)
+static void set_connected(struct lwm2m_ctx *ctx, bool connected,
+			  enum lwm2m_rd_client_event client_event)
 {
-	lwc.connected = connected;
-	on_connected_event(lwc.connected, client_event);
+	struct lcz_lwm2m_client *lwc_inst = get_lwc_from_ctx(ctx);
+	lwc_inst->connected = connected;
+	on_connected_event(ctx, lwc_inst->connected, client_event);
 }
 
 static void rd_client_event(struct lwm2m_ctx *client, enum lwm2m_rd_client_event client_event)
@@ -113,7 +142,7 @@ static void rd_client_event(struct lwm2m_ctx *client, enum lwm2m_rd_client_event
 
 	case LWM2M_RD_CLIENT_EVENT_BOOTSTRAP_REG_FAILURE:
 		LOG_DBG("Bootstrap registration failure!");
-		lcz_lwm2m_client_disconnect(false);
+		lcz_lwm2m_client_disconnect(get_lwm2m_client_index_from_ctx(client), false);
 		break;
 
 	case LWM2M_RD_CLIENT_EVENT_BOOTSTRAP_REG_COMPLETE:
@@ -126,31 +155,31 @@ static void rd_client_event(struct lwm2m_ctx *client, enum lwm2m_rd_client_event
 
 	case LWM2M_RD_CLIENT_EVENT_REGISTRATION_FAILURE:
 		LOG_DBG("Registration failure!");
-		lcz_lwm2m_client_disconnect(false);
+		lcz_lwm2m_client_disconnect(get_lwm2m_client_index_from_ctx(client), false);
 		break;
 
 	case LWM2M_RD_CLIENT_EVENT_REGISTRATION_COMPLETE:
 		LOG_DBG("Registration complete");
-		set_connected(true, client_event);
+		set_connected(client, true, client_event);
 		break;
 
 	case LWM2M_RD_CLIENT_EVENT_REG_UPDATE_FAILURE:
 		LOG_DBG("Registration update failure!");
-		set_connected(false, client_event);
+		set_connected(client, false, client_event);
 		break;
 
 	case LWM2M_RD_CLIENT_EVENT_REG_UPDATE_COMPLETE:
-		LOG_DBG("Registration update complete");
+		LOG_DBG("Server %d Registration update complete", client->srv_obj_inst);
 		break;
 
 	case LWM2M_RD_CLIENT_EVENT_DEREGISTER_FAILURE:
 		LOG_DBG("Deregister failure!");
-		lcz_lwm2m_client_disconnect(false);
+		lcz_lwm2m_client_disconnect(get_lwm2m_client_index_from_ctx(client), false);
 		break;
 
 	case LWM2M_RD_CLIENT_EVENT_DISCONNECT:
 		LOG_DBG("Disconnected");
-		set_connected(false, client_event);
+		set_connected(client, false, client_event);
 		break;
 
 	case LWM2M_RD_CLIENT_EVENT_QUEUE_MODE_RX_OFF:
@@ -159,7 +188,7 @@ static void rd_client_event(struct lwm2m_ctx *client, enum lwm2m_rd_client_event
 
 	case LWM2M_RD_CLIENT_EVENT_NETWORK_ERROR:
 		LOG_DBG("Network Error");
-		set_connected(false, client_event);
+		set_connected(client, false, client_event);
 		break;
 	}
 	on_lwm2m_event(client, client_event);
@@ -269,10 +298,19 @@ exit:
 	return ret;
 }
 
-int lcz_lwm2m_client_set_bootstrap(uint16_t server_inst, bool enable, uint16_t short_server_id)
+int lcz_lwm2m_client_set_bootstrap(uint16_t lwm2m_client_index, uint16_t server_inst, bool enable,
+				   uint16_t short_server_id)
 {
 	int ret;
 	char obj_path[LWM2M_MAX_PATH_STR_LEN];
+
+	if (lwm2m_client_index == LCZ_LWM2M_CLIENT_IDX_DEFAULT) {
+		lwc[lwm2m_client_index].bootstrap_enabled = enable;
+	} else if (enable) {
+		LOG_ERR("Cannot enable bootstrap on secondary LwM2M connection %d", lwm2m_client_index);
+		ret = -ENOTSUP;
+		goto exit;
+	}
 
 	if (enable && !IS_ENABLED(CONFIG_LCZ_LWM2M_RD_CLIENT_SUPPORT_BOOTSTRAP)) {
 		LOG_ERR("Bootstrap support not enabled");
@@ -326,7 +364,7 @@ int lcz_lwm2m_client_set_bootstrap(uint16_t server_inst, bool enable, uint16_t s
 		}
 #endif
 	}
-	lwc.bootstrap_enabled = enable;
+
 exit:
 	return ret;
 }
@@ -357,57 +395,76 @@ int lcz_lwm2m_client_unregister_event_callback(struct lcz_lwm2m_client_event_cal
 	return 0;
 }
 
-int lcz_lwm2m_client_connect(char *endpoint_name, lcz_lwm2m_client_transport_t transport)
+int lcz_lwm2m_client_connect(int lwm2m_client_index, int init_sec_obj_inst, int init_srv_obj_inst,
+			     char *endpoint_name, lcz_lwm2m_client_transport_t transport)
 {
+	int ret = 0;
 	uint32_t flags;
+	struct lcz_lwm2m_client *lwc_inst = &lwc[lwm2m_client_index];
 
-	if (!lwc.connection_started) {
-		flags = lwc.bootstrap_enabled ? LWM2M_RD_CLIENT_FLAG_BOOTSTRAP : 0;
+	if (lwm2m_client_index >= CONFIG_LCZ_LWM2M_RD_CLIENT_NUM) {
+		ret = -EINVAL;
+	} else {
+		if (!lwc_inst->connection_started) {
+			flags = lwc_inst->bootstrap_enabled ? LWM2M_RD_CLIENT_FLAG_BOOTSTRAP : 0;
 
-		(void)memset(&lwc.client, 0, sizeof(lwc.client));
+			(void)memset(&lwc_inst->client, 0, sizeof(lwc_inst->client));
 #if defined(CONFIG_LCZ_LWM2M_CLIENT_TLS_TAG)
-		lwc.client.tls_tag = CONFIG_LCZ_LWM2M_CLIENT_TLS_TAG;
+			lwc_inst->client.tls_tag = CONFIG_LCZ_LWM2M_CLIENT_TLS_TAG;
 #endif
 
 #if defined(CONFIG_LCZ_LWM2M_TRANSPORT_UDP)
-		if (transport == LCZ_LWM2M_CLIENT_TRANSPORT_UDP) {
-			lwc.client.transport_name = "udp";
-		}
+			if (transport == LCZ_LWM2M_CLIENT_TRANSPORT_UDP) {
+				lwc_inst->client.transport_name = "udp";
+			}
 #endif
 #if defined(CONFIG_LCZ_LWM2M_TRANSPORT_BLE_PERIPHERAL)
-		if (transport == LCZ_LWM2M_CLIENT_TRANSPORT_BLE) {
-			lwc.client.transport_name = "ble_peripheral";
-		}
+			if (transport == LCZ_LWM2M_CLIENT_TRANSPORT_BLE) {
+				lwc_inst->client.transport_name = "ble_peripheral";
+			}
 #endif
-		if (lwc.client.transport_name == NULL) {
-			LOG_ERR("lcz_lwm2m_client_connect: invalid transport %d for config",
-				transport);
-		}
+			if (lwc_inst->client.transport_name == NULL) {
+				LOG_ERR("lcz_lwm2m_client_connect: invalid transport %d for config",
+					transport);
+			}
 
-		lwm2m_rd_client_start(&lwc.client, endpoint_name, flags, rd_client_event, NULL);
+			lwm2m_rd_client_start(lwm2m_client_index, init_sec_obj_inst,
+					      init_srv_obj_inst, &lwc_inst->client, endpoint_name,
+					      flags, rd_client_event, NULL);
 #if defined(CONFIG_LCZ_LWM2M_CLIENT_ENABLE_ATTRIBUTES)
-		(void)attr_set_string(ATTR_ID_lwm2m_endpoint, (char const *)endpoint_name,
-				      strlen(endpoint_name));
+			(void)attr_set_string(ATTR_ID_lwm2m_endpoint, (char const *)endpoint_name,
+					      strlen(endpoint_name));
 #endif
-		lwc.connection_started = true;
+			lwc_inst->connection_started = true;
+		}
 	}
 
+	return ret;
+}
+
+int lcz_lwm2m_client_disconnect(int lwm2m_client_index, bool deregister)
+{
+	struct lcz_lwm2m_client *lwc_inst;
+
+	if (lwm2m_client_index < CONFIG_LCZ_LWM2M_RD_CLIENT_NUM) {
+		lwc_inst = &lwc[lwm2m_client_index];
+		lwm2m_rd_client_stop(&lwc_inst->client, rd_client_event, deregister);
+
+		lwc_inst->connection_started = false;
+
+		if (!deregister) {
+			set_connected(&lwc_inst->client, false, LWM2M_RD_CLIENT_EVENT_DISCONNECT);
+		}
+	}
 	return 0;
 }
 
-int lcz_lwm2m_client_disconnect(bool deregister)
+bool lcz_lwm2m_client_is_connected(int lwm2m_client_index)
 {
-	lwm2m_rd_client_stop(&lwc.client, rd_client_event, deregister);
-	lwc.connection_started = false;
-	if (!deregister) {
-		set_connected(false, LWM2M_RD_CLIENT_EVENT_DISCONNECT);
+	if (lwm2m_client_index >= CONFIG_LCZ_LWM2M_RD_CLIENT_NUM) {
+		return false;
 	}
-	return 0;
-}
-
-bool lcz_lwm2m_client_is_connected(void)
-{
-	return lwc.connected;
+	return lwc[lwm2m_client_index].connected;
 }
 
 int lcz_lwm2m_client_set_device_manufacturer(char *value)
@@ -581,6 +638,16 @@ exit:
 	return ret;
 }
 
+struct lwm2m_ctx *lcz_lwm2m_client_get_ctx(uint16_t index)
+{
+	if (index >= CONFIG_LCZ_LWM2M_RD_CLIENT_NUM) {
+		LOG_WRN("Request for invalid LwM2M client index %d, returning first context",
+			index);
+		return &lwc[0].client;
+	}
+	return &lwc[index].client;
+}
+
 SYS_INIT(lcz_lwm2m_client_init, APPLICATION, CONFIG_LCZ_LWM2M_CLIENT_INIT_PRIORITY);
 /**************************************************************************************************/
 /* SYS INIT                                                                                       */
@@ -644,8 +711,8 @@ static int lcz_lwm2m_client_init(const struct device *device)
 	}
 	psk_id = (char *)attr_get_quasi_static(ATTR_ID_lwm2m_psk_id);
 	psk = (uint8_t *)attr_get_quasi_static(ATTR_ID_lwm2m_psk);
-
 #endif
+
 	ret = lcz_lwm2m_client_set_server_url(0, server_url, strlen(server_url));
 	if (ret < 0) {
 		goto exit;
@@ -682,7 +749,8 @@ static int lcz_lwm2m_client_init(const struct device *device)
 		goto exit;
 	}
 #endif
-	ret = lcz_lwm2m_client_set_bootstrap(0, bootstrap, short_server_id);
+	ret = lcz_lwm2m_client_set_bootstrap(LCZ_LWM2M_CLIENT_IDX_DEFAULT, 0, bootstrap,
+					     short_server_id);
 	if (ret < 0) {
 		goto exit;
 	}
@@ -760,4 +828,9 @@ static int lcz_lwm2m_client_init(const struct device *device)
 	LOG_DBG("LwM2M client initialized");
 exit:
 	return ret;
+}
+
+void lcz_lwm2m_client_reboot(void)
+{
+	(void)device_reboot_cb(0, NULL, 0);
 }

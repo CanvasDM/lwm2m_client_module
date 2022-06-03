@@ -59,7 +59,8 @@ typedef enum lcz_lwm2m_client_device_battery_status {
 	LCZ_LWM2M_CLIENT_DEV_BATT_STAT_UNKNOWN,
 } lcz_lwm2m_client_device_battery_status_t;
 
-typedef void (*lcz_lwm2m_client_connected_cb_t)(bool connected,
+typedef void (*lcz_lwm2m_client_connected_cb_t)(struct lwm2m_ctx *client, int lwm2m_client_index,
+						bool connected,
 						enum lwm2m_rd_client_event client_event);
 
 struct lcz_lwm2m_client_event_callback_agent {
@@ -67,6 +68,12 @@ struct lcz_lwm2m_client_event_callback_agent {
 	lwm2m_ctx_event_cb_t event_callback;
 	lcz_lwm2m_client_connected_cb_t connected_callback;
 };
+
+/*
+ * The lwm2m_client supports multiple instances, referenced by a client index. The
+ * "default index" is the only index allowed to use LwM2M bootstrapping.
+ */
+#define LCZ_LWM2M_CLIENT_IDX_DEFAULT 0
 
 /* Defines for SMP over BLE tunnel for CoAP/LwM2M */
 #define LCZ_COAP_MGMT_OP_NOTIFY 4
@@ -125,6 +132,11 @@ int lcz_lwm2m_client_set_secret_key(uint16_t server_inst, uint8_t *value, uint16
 /**
  * @brief Enable or disable bootstrap
  *
+ * The lwm2m_client supports multiple instances, referenced by a client index. The
+ * "default index" is the only index allowed to use LwM2M bootstrapping. Attempting to
+ * enable bootstrap on other client indexes will result in an error.
+ *
+ * @param lwm2m client index to set bootstrap settings for
  * @param server_inst instance for object 0
  * @param enable enable or disable using bootstrap
  * @param short_server_id This identifier uniquely identifies each LwM2M Server configured for
@@ -132,7 +144,8 @@ int lcz_lwm2m_client_set_secret_key(uint16_t server_inst, uint8_t *value, uint16
  * 'false'. The values 0 and 65535 values MUST NOT be used for identifying the LwM2M Server.
  * @return int 0 on success, < 0 on error
  */
-int lcz_lwm2m_client_set_bootstrap(uint16_t server_inst, bool enable, uint16_t short_server_id);
+int lcz_lwm2m_client_set_bootstrap(uint16_t lwm2m_client_index, uint16_t server_inst, bool enable,
+				   uint16_t short_server_id);
 
 /**
  * @brief Register a callback that will be invoked when the reboot command is executed.
@@ -165,7 +178,8 @@ int lcz_lwm2m_client_unregister_event_callback(struct lcz_lwm2m_client_event_cal
  * @param transport Transport type
  * @return int 0 on success, < 0 on error
  */
-int lcz_lwm2m_client_connect(char *endpoint_name, lcz_lwm2m_client_transport_t transport);
+int lcz_lwm2m_client_connect(int lwm2m_client_index, int init_sec_obj_inst, int init_srv_obj_inst,
+			     char *endpoint_name, lcz_lwm2m_client_transport_t transport);
 
 /**
  * @brief Disconnect the LwM2M client
@@ -173,7 +187,7 @@ int lcz_lwm2m_client_connect(char *endpoint_name, lcz_lwm2m_client_transport_t t
  * @param deregister true to trigger a deregister false to force close the connection
  * @return int 0 on success, < 0 on error
  */
-int lcz_lwm2m_client_disconnect(bool deregister);
+int lcz_lwm2m_client_disconnect(int lwm2m_client_index, bool deregister);
 
 /**
  * @brief Check if the LwM2M client is connected.
@@ -181,7 +195,7 @@ int lcz_lwm2m_client_disconnect(bool deregister);
  * @return true LwM2M clients is connected
  * @return false LwM2M clients is NOT connected
  */
-bool lcz_lwm2m_client_is_connected(void);
+bool lcz_lwm2m_client_is_connected(int lwm2m_client_index);
 
 /**
  * @brief Set manufacturer
@@ -257,6 +271,11 @@ int lcz_lwm2m_client_set_hardware_version(char *value);
  * @return int 0 on success, < 0 on error
  */
 int lcz_lwm2m_client_set_battery_status(lcz_lwm2m_client_device_battery_status_t *status);
+
+/**
+ * @brief Close all open LwM2M connections and reboot the device
+ */
+void lcz_lwm2m_client_reboot(void);
 
 #ifdef __cplusplus
 }

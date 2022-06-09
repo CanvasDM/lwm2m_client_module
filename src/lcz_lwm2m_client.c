@@ -729,7 +729,7 @@ static int lcz_lwm2m_client_init(const struct device *device)
 			goto exit;
 		}
 
-		ret = lcz_lwm2m_client_set_secret_key(0, psk, sizeof(psk));
+		ret = lcz_lwm2m_client_set_secret_key(0, psk, CONFIG_LCZ_LWM2M_SECURITY_KEY_SIZE);
 		if (ret < 0) {
 			goto exit;
 		}

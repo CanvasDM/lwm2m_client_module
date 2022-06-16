@@ -6,8 +6,8 @@ lwm2m_server_url:
     maxLength: 255
     minLength: 11 # coap://1.io
     type: string
-    x-ctype: string
     pattern: coaps?://(\.?|\w|[-|_])+([\.|/]((\w|[0-9]|[-|_])*))+(\:[0-9]{1,5})?
+  x-ctype: string
   x-broadcast: true
   x-default: coap://leshan.eclipseprojects.io:5683
   x-example: coaps://leshan.eclipseprojects.io:5784
@@ -24,7 +24,7 @@ lwm2m_endpoint:
     maxLength: 32
     minLength: 1
     type: string
-    x-ctype: string
+  x-ctype: string
   x-broadcast: true
   x-default: my_device
   x-lockable: true
@@ -46,7 +46,7 @@ lwm2m_security:
       CERT: 2
       NO_SEC: 3
       CERT_EST: 4
-    x-ctype: uint8_t
+  x-ctype: uint8_t
   x-broadcast: true
   x-default: 3
   x-example: 0
@@ -63,7 +63,7 @@ lwm2m_psk_id:
     maxLength: 32
     minLength: 1
     type: string
-    x-ctype: string
+  x-ctype: string
   x-broadcast: true
   x-default: my_device
   x-example: my_device
@@ -80,7 +80,7 @@ lwm2m_psk:
     maxItems: 16
     minItems: 16
     type: array
-    x-ctype: uint8_t
+  x-ctype: uint8_t
   x-broadcast: true
   x-array-size: 16
   x-default: "{ 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f }"
@@ -97,7 +97,7 @@ lwm2m_bootstrap:
     maximum: 1
     minimum: 0
     type: integer
-    x-ctype: bool
+  x-ctype: bool
   x-broadcast: true
   x-default: 0
   x-example: 0
@@ -114,7 +114,7 @@ lwm2m_short_id:
     maximum: 65534
     minimum: 1
     type: integer
-    x-ctype: uint16_t
+  x-ctype: uint16_t
   x-broadcast: true
   x-default: 1
   x-example: 101
@@ -134,7 +134,7 @@ lwm2m_mfg:
     maxLength: 32
     minLength: 1
     type: string
-    x-ctype: string
+  x-ctype: string
   x-broadcast: true
   x-default: Laird Connectivity
   x-lockable: true
@@ -150,7 +150,7 @@ lwm2m_mn:
     maxLength: 32
     minLength: 1
     type: string
-    x-ctype: string
+  x-ctype: string
   x-broadcast: true
   x-default: MG100
   x-lockable: true
@@ -166,7 +166,7 @@ lwm2m_sn:
     maxLength: 64
     minLength: 1
     type: string
-    x-ctype: string
+  x-ctype: string
   x-broadcast: true
   x-default: MG100
   x-lockable: true
@@ -182,7 +182,7 @@ lwm2m_fw_ver:
     maxLength: 32
     minLength: 1
     type: string
-    x-ctype: string
+  x-ctype: string
   x-broadcast: true
   x-default: 0.0.0
   x-lockable: true
@@ -207,7 +207,7 @@ lwm2m_pwr_src:
       USB: 5
       AC: 6
       SOLAR: 7
-    x-ctype: uint8_t
+  x-ctype: uint8_t
   x-broadcast: true
   x-default: 0
   x-lockable: false
@@ -225,7 +225,7 @@ lwm2m_pwr_src_volt:
     maximum: 600000
     minimum: -600000
     type: integer
-    x-ctype: int32_t
+  x-ctype: int32_t
   x-broadcast: true
   x-default: 0
   x-lockable: false
@@ -243,7 +243,7 @@ lwm2m_sw_ver:
     maxLength: 32
     minLength: 1
     type: string
-    x-ctype: string
+  x-ctype: string
   x-broadcast: true
   x-default: 0.0.0
   x-lockable: true
@@ -259,7 +259,7 @@ lwm2m_hw_ver:
     maxLength: 32
     minLength: 1
     type: string
-    x-ctype: string
+  x-ctype: string
   x-broadcast: true
   x-default: 0.0.0
   x-lockable: true
@@ -283,7 +283,7 @@ lwm2m_batt_stat:
       LOW: 4
       NOT_INST: 5
       UNKNOWN: 6
-    x-ctype: uint8_t
+  x-ctype: uint8_t
   x-broadcast: true
   x-default: 6
   x-lockable: false

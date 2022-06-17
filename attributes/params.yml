@@ -1,294 +1,281 @@
 ---
-lwm2m_server_url:
-  name: lwm2m_server_url
-  required: true
-  schema:
-    maxLength: 255
-    minLength: 11 # coap://1.io
-    type: string
-    pattern: coaps?://(\.?|\w|[-|_])+([\.|/]((\w|[0-9]|[-|_])*))+(\:[0-9]{1,5})?
-  x-ctype: string
-  x-broadcast: true
-  x-default: coap://leshan.eclipseprojects.io:5683
-  x-example: coaps://leshan.eclipseprojects.io:5784
-  x-lockable: true
-  x-prepare: false
-  x-readable: true
-  x-savable: true
-  x-writable: true
-  summary: Server URL to connect to
-lwm2m_endpoint:
-  name: lwm2m_endpoint
-  required: true
-  schema:
-    maxLength: 32
-    minLength: 1
-    type: string
-  x-ctype: string
-  x-broadcast: true
-  x-default: my_device
-  x-lockable: true
-  x-prepare: false
-  x-readable: true
-  x-savable: true
-  x-writable: true
-  summary: Endpoint name to identify the device
-lwm2m_security:
-  name: lwm2m_security
-  required: true
-  schema:
-    maximum: 4
-    minimum: 0
-    type: integer
-    enum:
-      PSK: 0
-      RPK: 1
-      CERT: 2
-      NO_SEC: 3
-      CERT_EST: 4
-  x-ctype: uint8_t
-  x-broadcast: true
-  x-default: 3
-  x-example: 0
-  x-lockable: true
-  x-prepare: false
-  x-readable: true
-  x-savable: true
-  x-writable: true
-  summary: "LwM2M Security mode"
-lwm2m_psk_id:
-  name: lwm2m_psk_id
-  required: true
-  schema:
-    maxLength: 32
-    minLength: 1
-    type: string
-  x-ctype: string
-  x-broadcast: true
-  x-default: my_device
-  x-example: my_device
-  x-lockable: true
-  x-prepare: false
-  x-readable: true
-  x-savable: true
-  x-writable: true
-  summary: PSK ID
-lwm2m_psk:
-  name: lwm2m_psk
-  required: true
-  schema:
-    maxItems: 16
-    minItems: 16
-    type: array
-  x-ctype: uint8_t
-  x-broadcast: true
-  x-array-size: 16
-  x-default: "{ 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f }"
-  x-lockable: true
-  x-prepare: false
-  x-readable: true
-  x-savable: true
-  x-writable: true
-  summary: Pre-shared key
-lwm2m_bootstrap:
-  name: lwm2m_bootstrap
-  required: true
-  schema:
-    maximum: 1
-    minimum: 0
-    type: integer
-  x-ctype: bool
-  x-broadcast: true
-  x-default: 0
-  x-example: 0
-  x-lockable: true
-  x-prepare: false
-  x-readable: true
-  x-savable: true
-  x-writable: true
-  summary: 0 - disabled bootstrap, 1 - enabled
-lwm2m_short_id:
-  name: lwm2m_short_id
-  required: true
-  schema:
-    maximum: 65534
-    minimum: 1
-    type: integer
-  x-ctype: uint16_t
-  x-broadcast: true
-  x-default: 1
-  x-example: 101
-  x-lockable: true
-  x-prepare: false
-  x-readable: true
-  x-savable: true
-  x-writable: true
-  summary:
-    "short_server_id This identifier uniquely identifies each LwM2M Server configured for
-    the LwM2M Client. This Resource MUST be set when the Bootstrap-Server Resource has a value of
-    'false'."
-lwm2m_mfg:
-  name: lwm2m_mfg
-  required: false
-  schema:
-    maxLength: 32
-    minLength: 1
-    type: string
-  x-ctype: string
-  x-broadcast: true
-  x-default: Laird Connectivity
-  x-lockable: true
-  x-prepare: false
-  x-readable: true
-  x-savable: true
-  x-writable: true
-  summary: Device manufacturer
-lwm2m_mn:
-  name: lwm2m_mn
-  required: false
-  schema:
-    maxLength: 32
-    minLength: 1
-    type: string
-  x-ctype: string
-  x-broadcast: true
-  x-default: MG100
-  x-lockable: true
-  x-prepare: false
-  x-readable: true
-  x-savable: true
-  x-writable: true
-  summary: Device model number
-lwm2m_sn:
-  name: lwm2m_sn
-  required: false
-  schema:
-    maxLength: 64
-    minLength: 1
-    type: string
-  x-ctype: string
-  x-broadcast: true
-  x-default: MG100
-  x-lockable: true
-  x-prepare: false
-  x-readable: true
-  x-savable: true
-  x-writable: true
-  summary: Device serial number
-lwm2m_fw_ver:
-  name: lwm2m_fw_ver
-  required: false
-  schema:
-    maxLength: 32
-    minLength: 1
-    type: string
-  x-ctype: string
-  x-broadcast: true
-  x-default: 0.0.0
-  x-lockable: true
-  x-prepare: false
-  x-readable: true
-  x-savable: true
-  x-writable: true
-  summary: Device firmware version
-lwm2m_pwr_src:
-  name: lwm2m_pwr_src
-  required: false
-  schema:
-    maximum: 7
-    minimum: 0
-    type: integer
-    enum:
-      DC: 0
-      INT_BATT: 1
-      EXT_BATT: 2
-      FUEL_CELL: 3
-      POE: 4
-      USB: 5
-      AC: 6
-      SOLAR: 7
-  x-ctype: uint8_t
-  x-broadcast: true
-  x-default: 0
-  x-lockable: false
-  x-prepare: false
-  x-readable: true
-  x-savable: false
-  x-writable: true
-  summary:
-    "Device power source.
-    This attribute maps to LwM2M path 3/0/6/0."
-lwm2m_pwr_src_volt:
-  name: lwm2m_pwr_src_volt
-  required: false
-  schema:
-    maximum: 600000
-    minimum: -600000
-    type: integer
-  x-ctype: int32_t
-  x-broadcast: true
-  x-default: 0
-  x-lockable: false
-  x-prepare: false
-  x-readable: true
-  x-savable: false
-  x-writable: false
-  summary:
-    "Device power source voltage.
-    This attribute maps to LwM2M path 3/0/7/0."
-lwm2m_sw_ver:
-  name: lwm2m_sw_ver
-  required: false
-  schema:
-    maxLength: 32
-    minLength: 1
-    type: string
-  x-ctype: string
-  x-broadcast: true
-  x-default: 0.0.0
-  x-lockable: true
-  x-prepare: false
-  x-readable: true
-  x-savable: true
-  x-writable: true
-  summary: Device software version
-lwm2m_hw_ver:
-  name: lwm2m_hw_ver
-  required: false
-  schema:
-    maxLength: 32
-    minLength: 1
-    type: string
-  x-ctype: string
-  x-broadcast: true
-  x-default: 0.0.0
-  x-lockable: true
-  x-prepare: false
-  x-readable: true
-  x-savable: true
-  x-writable: true
-  summary: Device hardware version
-lwm2m_batt_stat:
-  name: lwm2m_batt_stat
-  required: false
-  schema:
-    maximum: 6
-    minimum: 0
-    type: integer
-    enum:
-      NORM: 0
-      CHARGING: 1
-      CHARGE_COMP: 2
-      DAMAGED: 3
-      LOW: 4
-      NOT_INST: 5
-      UNKNOWN: 6
-  x-ctype: uint8_t
-  x-broadcast: true
-  x-default: 6
-  x-lockable: false
-  x-prepare: false
-  x-readable: true
-  x-savable: false
-  x-writable: false
-  summary: "Device battery status"
+info:
+  title: lwm2m_client_attributes
+attributes:
+  - name: lwm2m_server_url
+    required: true
+    schema:
+      maxLength: 255
+      minLength: 11 # coap://1.io
+      type: string
+      pattern: coaps?://(\.?|\w|[-|_])+([\.|/]((\w|[0-9]|[-|_])*))+(\:[0-9]{1,5})?
+    x-ctype: string
+    x-broadcast: true
+    x-default: coap://leshan.eclipseprojects.io:5683
+    x-example: coaps://leshan.eclipseprojects.io:5784
+    x-lockable: true
+    x-prepare: false
+    x-readable: true
+    x-savable: true
+    x-writable: true
+    summary: Server URL to connect to
+  - name: lwm2m_endpoint
+    required: true
+    schema:
+      maxLength: 32
+      minLength: 1
+      type: string
+    x-ctype: string
+    x-broadcast: true
+    x-default: my_device
+    x-lockable: true
+    x-prepare: false
+    x-readable: true
+    x-savable: true
+    x-writable: true
+    summary: Endpoint name to identify the device
+  - name: lwm2m_security
+    required: true
+    schema:
+      maximum: 4
+      minimum: 0
+      type: integer
+      enum:
+        PSK: 0
+        RPK: 1
+        CERT: 2
+        NO_SEC: 3
+        CERT_EST: 4
+    x-ctype: uint8_t
+    x-broadcast: true
+    x-default: 3
+    x-example: 0
+    x-lockable: true
+    x-prepare: false
+    x-readable: true
+    x-savable: true
+    x-writable: true
+    summary: "LwM2M Security mode"
+  - name: lwm2m_psk_id
+    required: true
+    schema:
+      maxLength: 32
+      minLength: 1
+      type: string
+    x-ctype: string
+    x-broadcast: true
+    x-default: my_device
+    x-example: my_device
+    x-lockable: true
+    x-prepare: false
+    x-readable: true
+    x-savable: true
+    x-writable: true
+    summary: PSK ID
+  - name: lwm2m_psk
+    required: true
+    schema:
+      maxItems: 16
+      minItems: 16
+      type: array
+    x-ctype: uint8_t
+    x-broadcast: true
+    x-array-size: 16
+    x-default: "{ 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f }"
+    x-lockable: true
+    x-prepare: false
+    x-readable: true
+    x-savable: true
+    x-writable: true
+    summary: Pre-shared key
+  - name: lwm2m_bootstrap
+    required: true
+    schema:
+      maximum: 1
+      minimum: 0
+      type: integer
+    x-ctype: bool
+    x-broadcast: true
+    x-default: 0
+    x-example: 0
+    x-lockable: true
+    x-prepare: false
+    x-readable: true
+    x-savable: true
+    x-writable: true
+    summary: 0 - disabled bootstrap, 1 - enabled
+  - name: lwm2m_short_id
+    required: true
+    schema:
+      maximum: 65534
+      minimum: 1
+      type: integer
+    x-ctype: uint16_t
+    x-broadcast: true
+    x-default: 1
+    x-example: 101
+    x-lockable: true
+    x-prepare: false
+    x-readable: true
+    x-savable: true
+    x-writable: true
+    summary:
+      "short_server_id This identifier uniquely identifies each LwM2M Server configured for
+      the LwM2M Client. This Resource MUST be set when the Bootstrap-Server Resource has a value of
+      'false'."
+  - name: lwm2m_mfg
+    required: false
+    schema:
+      maxLength: 32
+      minLength: 1
+      type: string
+    x-ctype: string
+    x-broadcast: true
+    x-default: Laird Connectivity
+    x-lockable: true
+    x-prepare: false
+    x-readable: true
+    x-savable: true
+    x-writable: true
+    summary: Device manufacturer
+  - name: lwm2m_mn
+    required: false
+    schema:
+      maxLength: 32
+      minLength: 1
+      type: string
+    x-ctype: string
+    x-broadcast: true
+    x-default: MG100
+    x-lockable: true
+    x-prepare: false
+    x-readable: true
+    x-savable: true
+    x-writable: true
+    summary: Device model number
+  - name: lwm2m_sn
+    required: false
+    schema:
+      maxLength: 64
+      minLength: 1
+      type: string
+    x-ctype: string
+    x-broadcast: true
+    x-default: MG100
+    x-lockable: true
+    x-prepare: false
+    x-readable: true
+    x-savable: true
+    x-writable: true
+    summary: Device serial number
+  - name: lwm2m_fw_ver
+    required: false
+    schema:
+      maxLength: 32
+      minLength: 1
+      type: string
+    x-ctype: string
+    x-broadcast: true
+    x-default: 0.0.0
+    x-lockable: true
+    x-prepare: false
+    x-readable: true
+    x-savable: true
+    x-writable: true
+    summary: Device firmware version
+  - name: lwm2m_pwr_src
+    required: false
+    schema:
+      maximum: 7
+      minimum: 0
+      type: integer
+      enum:
+        DC: 0
+        INT_BATT: 1
+        EXT_BATT: 2
+        FUEL_CELL: 3
+        POE: 4
+        USB: 5
+        AC: 6
+        SOLAR: 7
+    x-ctype: uint8_t
+    x-broadcast: true
+    x-default: 0
+    x-lockable: false
+    x-prepare: false
+    x-readable: true
+    x-savable: false
+    x-writable: true
+    summary:
+      "Device power source.
+      This attribute maps to LwM2M path 3/0/6/0."
+  - name: lwm2m_pwr_src_volt
+    required: false
+    schema:
+      maximum: 600000
+      minimum: -600000
+      type: integer
+    x-ctype: int32_t
+    x-broadcast: true
+    x-default: 0
+    x-lockable: false
+    x-prepare: false
+    x-readable: true
+    x-savable: false
+    x-writable: false
+    summary:
+      "Device power source voltage.
+      This attribute maps to LwM2M path 3/0/7/0."
+  - name: lwm2m_sw_ver
+    required: false
+    schema:
+      maxLength: 32
+      minLength: 1
+      type: string
+    x-ctype: string
+    x-broadcast: true
+    x-default: 0.0.0
+    x-lockable: true
+    x-prepare: false
+    x-readable: true
+    x-savable: true
+    x-writable: true
+    summary: Device software version
+  - name: lwm2m_hw_ver
+    required: false
+    schema:
+      maxLength: 32
+      minLength: 1
+      type: string
+    x-ctype: string
+    x-broadcast: true
+    x-default: 0.0.0
+    x-lockable: true
+    x-prepare: false
+    x-readable: true
+    x-savable: true
+    x-writable: true
+    summary: Device hardware version
+  - name: lwm2m_batt_stat
+    required: false
+    schema:
+      maximum: 6
+      minimum: 0
+      type: integer
+      enum:
+        NORM: 0
+        CHARGING: 1
+        CHARGE_COMP: 2
+        DAMAGED: 3
+        LOW: 4
+        NOT_INST: 5
+        UNKNOWN: 6
+    x-ctype: uint8_t
+    x-broadcast: true
+    x-default: 6
+    x-lockable: false
+    x-prepare: false
+    x-readable: true
+    x-savable: false
+    x-writable: false
+    summary: "Device battery status"

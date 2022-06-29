@@ -84,7 +84,7 @@ attributes:
     x-default: "{ 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f }"
     x-lockable: true
     x-prepare: false
-    x-readable: true
+    x-readable: false
     x-savable: true
     x-writable: true
     summary: Pre-shared key
@@ -146,7 +146,7 @@ attributes:
       type: string
     x-ctype: string
     x-broadcast: true
-    x-default: MG100
+    x-default: model
     x-lockable: true
     x-prepare: false
     x-readable: true
@@ -161,7 +161,7 @@ attributes:
       type: string
     x-ctype: string
     x-broadcast: true
-    x-default: MG100
+    x-default: serial_number
     x-lockable: true
     x-prepare: false
     x-readable: true

@@ -365,13 +365,18 @@ static int lwm2m_transport_ble_peripheral_is_connected(struct lwm2m_ctx *client_
 static void lwm2m_transport_ble_peripheral_tx_pending(struct lwm2m_ctx *client_ctx, bool pending)
 {
 	static bool pending_state = false;
+	lcz_lwm2m_client_data_ready_cb_t cb;
 
 	/* Update the advertising flag on change */
 	if (pending != pending_state) {
 		/* Save the new state */
 		pending_state = pending;
 
-#warning Bug #21864 Add hooks into advertising flag update
+		/* Call the handler to update the advertising flag */
+		cb = lcz_lwm2m_client_get_data_ready_cb();
+		if (cb != NULL) {
+			cb(pending_state);
+		}
 	}
 }
 

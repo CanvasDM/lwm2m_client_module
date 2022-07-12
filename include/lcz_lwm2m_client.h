@@ -87,6 +87,10 @@ struct lcz_lwm2m_client_event_callback_agent {
 #define LCZ_COAP_MGMT_MAX_COAP_PACKET_SIZE                                                         \
 	(CONFIG_BT_L2CAP_TX_MTU - 3 - sizeof(struct bt_dfu_smp_header))
 
+#if defined(CONFIG_LCZ_LWM2M_TRANSPORT_BLE_PERIPHERAL)
+typedef void (*lcz_lwm2m_client_data_ready_cb_t)(bool data_ready);
+#endif
+
 /**************************************************************************************************/
 /* Global Function Prototypes                                                                     */
 /**************************************************************************************************/
@@ -276,6 +280,39 @@ int lcz_lwm2m_client_set_battery_status(lcz_lwm2m_client_device_battery_status_t
  * @brief Close all open LwM2M connections and reboot the device
  */
 void lcz_lwm2m_client_reboot(void);
+
+#if defined(CONFIG_LCZ_LWM2M_TRANSPORT_BLE_PERIPHERAL)
+/**
+ * @brief Register a handler for advertising flag state changes
+ *
+ * The LwM2M client, when using the BLE transport, needs to signal the availability of LwM2M
+ * data to be sent to the gateway. This is typically done through a flag in the BLE
+ * advertisement. Rather than attempt to control the advertisement data from inside
+ * of the LwM2M client, an application-specific handler must be provided.
+ *
+ * The registered handler will be called whenever the state of "Has LwM2M data to send"
+ * changes. The handler is called from the context of the LwM2M thread.
+ *
+ * The LwM2M client only supports registration of a single handler. If the registered
+ * handler needs to be removed, this function can be called and passed a NULL pointer
+ * for the handler function.
+ *
+ * @param[in] handler Function pointer to handler for advertising flag state changes
+ * or NULL to remove the previous handler
+ */
+void lcz_lwm2m_client_register_data_ready_cb(lcz_lwm2m_client_data_ready_cb_t cb);
+
+/**
+ * @brief Get the current handler for advertising flag state changes
+ *
+ * This function returns the pointer to the handler function registered by
+ * lcz_lwm2m_client_register_data_ready_cb().
+ *
+ * @return Pointer to the handler function for advertising flag state changes
+ * or NULL if no handler is registered.
+ */
+lcz_lwm2m_client_data_ready_cb_t lcz_lwm2m_client_get_data_ready_cb(void);
+#endif /* CONFIG_LCZ_LWM2M_TRANSPORT_BLE_PERIPHERAL */
 
 #ifdef __cplusplus
 }

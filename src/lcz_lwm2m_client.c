@@ -53,6 +53,10 @@ static K_WORK_DELAYABLE_DEFINE(reboot_work, reboot_work_cb);
 
 static sys_slist_t lwm2m_event_callback_list = SYS_SLIST_STATIC_INIT(&lwm2m_event_callback_list);
 
+#if defined(CONFIG_LCZ_LWM2M_TRANSPORT_BLE_PERIPHERAL)
+static lcz_lwm2m_client_data_ready_cb_t data_ready_cb = NULL;
+#endif
+
 /**************************************************************************************************/
 /* Local Function Definitions                                                                     */
 /**************************************************************************************************/
@@ -307,7 +311,8 @@ int lcz_lwm2m_client_set_bootstrap(uint16_t lwm2m_client_index, uint16_t server_
 	if (lwm2m_client_index == LCZ_LWM2M_CLIENT_IDX_DEFAULT) {
 		lwc[lwm2m_client_index].bootstrap_enabled = enable;
 	} else if (enable) {
-		LOG_ERR("Cannot enable bootstrap on secondary LwM2M connection %d", lwm2m_client_index);
+		LOG_ERR("Cannot enable bootstrap on secondary LwM2M connection %d",
+			lwm2m_client_index);
 		ret = -ENOTSUP;
 		goto exit;
 	}
@@ -834,3 +839,15 @@ void lcz_lwm2m_client_reboot(void)
 {
 	(void)device_reboot_cb(0, NULL, 0);
 }
+
+#if defined(CONFIG_LCZ_LWM2M_TRANSPORT_BLE_PERIPHERAL)
+void lcz_lwm2m_client_register_data_ready_cb(lcz_lwm2m_data_ready_cb_t cb)
+{
+	data_ready_cb = cb;
+}
+
+lcz_lwm2m_client_data_ready_cb_t lcz_lwm2m_client_get_data_ready_cb(void)
+{
+	return data_ready_cb;
+}
+#endif

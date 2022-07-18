@@ -841,7 +841,7 @@ void lcz_lwm2m_client_reboot(void)
 }
 
 #if defined(CONFIG_LCZ_LWM2M_TRANSPORT_BLE_PERIPHERAL)
-void lcz_lwm2m_client_register_data_ready_cb(lcz_lwm2m_data_ready_cb_t cb)
+void lcz_lwm2m_client_register_data_ready_cb(lcz_lwm2m_client_data_ready_cb_t cb)
 {
 	data_ready_cb = cb;
 }

@@ -91,6 +91,8 @@ static int add_to_queue(struct k_fifo *queue, const uint8_t *data, size_t len);
 
 static void bt_connected(struct bt_conn *conn, uint8_t conn_err);
 static void bt_disconnected(struct bt_conn *conn, uint8_t reason);
+static void bt_security_changed(struct bt_conn *conn, bt_security_t level,
+				enum bt_security_err err);
 
 static void tunnel_id_timeout_handler(struct k_work *work);
 
@@ -131,6 +133,7 @@ static struct mgmt_group coap_mgmt_group = {
 static struct bt_conn_cb conn_callbacks = {
 	.connected = bt_connected,
 	.disconnected = bt_disconnected,
+	.security_changed = bt_security_changed,
 };
 
 /** Currently active tunnel */
@@ -599,6 +602,16 @@ static void bt_disconnected(struct bt_conn *conn, uint8_t reason)
 
 	/* Release the mutex lock for our data */
 	k_mutex_unlock(&smp_mutex);
+}
+
+static void bt_security_changed(struct bt_conn *conn, bt_security_t level, enum bt_security_err err)
+{
+	if (err != BT_SECURITY_ERR_SUCCESS) {
+		LOG_ERR("bt_security_changed: fail with level %d err %d", level, err);
+
+		/* Try unpairing this device if this happens */
+		(void)bt_unpair(BT_ID_DEFAULT, bt_conn_get_dst(conn));
+	}
 }
 
 static void tunnel_id_timeout_handler(struct k_work *work)

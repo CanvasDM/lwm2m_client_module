@@ -22,7 +22,7 @@ attributes:
   - name: lwm2m_endpoint
     required: true
     schema:
-      maxLength: 32
+      maxLength: 64
       minLength: 1
       type: string
     x-ctype: string
@@ -59,7 +59,7 @@ attributes:
   - name: lwm2m_psk_id
     required: true
     schema:
-      maxLength: 32
+      maxLength: 64
       minLength: 1
       type: string
     x-ctype: string

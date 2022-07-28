@@ -26,6 +26,12 @@ config LCZ_LWM2M_CLIENT_ENDPOINT_NAME
 	help
 	  Endpoint name used by the application for starting a connection.
 
+config LCZ_LWM2M_TLS_TAG
+	int "TLS tag for secure connection"
+	depends on LCZ_LWM2M_DTLS_SUPPORT
+	default 999
+	range 0 65535
+
 config LCZ_LWM2M_CLIENT_REBOOT_DELAY_SECONDS
 	int "Delay before reboot (seconds)"
 	default 5
@@ -87,12 +93,6 @@ config LCZ_LWM2M_SECURITY_MODE
 	  2 - Certificate
 	  3 - No Security
 	  4 - Certificate with EST
-
-config LCZ_LWM2M_TLS_TAG
-	int "TLS tag for secure connection"
-	depends on LCZ_LWM2M_DTLS_SUPPORT
-	default 999
-	range 0 65535
 
 config LCZ_LWM2M_PSK_ID
 	string "PSK ID"

@@ -16,6 +16,7 @@ LOG_MODULE_REGISTER(lcz_lwm2m_client, CONFIG_LCZ_LWM2M_CLIENT_LOG_LEVEL);
 #include <init.h>
 #include <sys/reboot.h>
 #include <sys/util.h>
+#include <lwm2m_engine.h>
 #include "lcz_lwm2m_client.h"
 #if defined(CONFIG_LCZ_LWM2M_CLIENT_ENABLE_ATTRIBUTES)
 #include "attr.h"
@@ -43,6 +44,9 @@ static void reboot_work_cb(struct k_work *work);
 static void on_lwm2m_event(struct lwm2m_ctx *client, enum lwm2m_rd_client_event client_event);
 static void on_connected_event(struct lwm2m_ctx *client, bool connected,
 			       enum lwm2m_rd_client_event client_event);
+static int create_obj_if_needed(uint16_t obj_id, uint16_t obj_inst);
+static int create_res_if_needed(uint16_t obj_id, uint16_t obj_inst, uint16_t res_id,
+				uint16_t res_inst);
 
 /**************************************************************************************************/
 /* Local Data Definitions                                                                         */
@@ -199,6 +203,50 @@ static void rd_client_event(struct lwm2m_ctx *client, enum lwm2m_rd_client_event
 	on_lwm2m_event(client, client_event);
 }
 
+static int create_obj_if_needed(uint16_t obj_id, uint16_t obj_inst)
+{
+	int ret;
+	struct lwm2m_engine_obj_inst *obj;
+	struct lwm2m_obj_path path = { 0 };
+	char obj_path[LWM2M_MAX_PATH_STR_LEN];
+
+	ret = 0;
+	path.obj_id = obj_id;
+	path.obj_inst_id = obj_inst;
+	path.level = 2;
+
+	obj = lwm2m_engine_get_obj_inst(&path);
+	if (obj == NULL) {
+		snprintk(obj_path, sizeof(obj_path), "%d/%d", obj_id, obj_inst);
+		ret = lwm2m_engine_create_obj_inst(obj_path);
+	}
+	return ret;
+}
+
+static int create_res_if_needed(uint16_t obj_id, uint16_t obj_inst, uint16_t res_id,
+				uint16_t res_inst)
+{
+	int ret;
+	struct lwm2m_engine_res *res;
+	struct lwm2m_obj_path path = { 0 };
+	char res_path[LWM2M_MAX_PATH_STR_LEN];
+
+	ret = 0;
+	path.obj_id = obj_id;
+	path.obj_inst_id = obj_inst;
+	path.res_id = res_id;
+	path.res_inst_id = res_inst;
+	path.level = 4;
+
+	res = lwm2m_engine_get_res(&path);
+	if (res == NULL || res->res_instances->res_inst_id == 65535) {
+		snprintk(res_path, sizeof(res_path), "%d/%d/%d/%d", obj_id, obj_inst, res_id,
+			 res_inst);
+		ret = lwm2m_engine_create_res_inst(res_path);
+	}
+	return ret;
+}
+
 /**************************************************************************************************/
 /* Global Function Definitions                                                                    */
 /**************************************************************************************************/
@@ -209,6 +257,11 @@ int lcz_lwm2m_client_set_server_url(uint16_t server_inst, char *url, uint8_t len
 	char *server_url;
 	uint16_t server_url_len;
 	uint8_t server_url_flags;
+
+	ret = create_obj_if_needed(LWM2M_OBJECT_SECURITY_ID, server_inst);
+	if (ret < 0) {
+		goto exit;
+	}
 
 	snprintk(obj_path, sizeof(obj_path), "0/%d/0", server_inst);
 	ret = lwm2m_engine_get_res_data(obj_path, (void **)&server_url, &server_url_len,
@@ -231,9 +284,12 @@ int lcz_lwm2m_client_set_server_url(uint16_t server_inst, char *url, uint8_t len
 	}
 
 #if defined(CONFIG_LCZ_LWM2M_CLIENT_ENABLE_ATTRIBUTES)
-	ret = attr_set_string(ATTR_ID_lwm2m_server_url, (char const *)server_url, server_url_len);
-	if (ret < 0) {
-		goto exit;
+	if (server_inst == LCZ_LWM2M_CLIENT_SERVER_INST_DEFAULT) {
+		ret = attr_set_string(ATTR_ID_lwm2m_server_url, (char const *)server_url,
+				      server_url_len);
+		if (ret < 0) {
+			goto exit;
+		}
 	}
 #endif
 	LOG_INF("Server URL: %s", log_strdup(server_url));
@@ -247,16 +303,23 @@ int lcz_lwm2m_client_set_security_mode(uint16_t server_inst, lcz_lwm2m_client_se
 	int ret;
 	char obj_path[LWM2M_MAX_PATH_STR_LEN];
 
+	ret = create_obj_if_needed(LWM2M_OBJECT_SECURITY_ID, server_inst);
+	if (ret < 0) {
+		goto exit;
+	}
+
 	snprintk(obj_path, sizeof(obj_path), "0/%d/2", server_inst);
 	ret = lwm2m_engine_set_u8(obj_path, mode);
 	if (ret < 0) {
 		goto exit;
 	}
 #if defined(CONFIG_LCZ_LWM2M_CLIENT_ENABLE_ATTRIBUTES)
-	ret = attr_set(ATTR_ID_lwm2m_security, ATTR_TYPE_U8, &mode,
-		       sizeof(lcz_lwm2m_client_security_mode_t), NULL);
-	if (ret < 0) {
-		goto exit;
+	if (server_inst == LCZ_LWM2M_CLIENT_SERVER_INST_DEFAULT) {
+		ret = attr_set(ATTR_ID_lwm2m_security, ATTR_TYPE_U8, &mode,
+			       sizeof(lcz_lwm2m_client_security_mode_t), NULL);
+		if (ret < 0) {
+			goto exit;
+		}
 	}
 #endif
 exit:
@@ -268,15 +331,22 @@ int lcz_lwm2m_client_set_key_or_id(uint16_t server_inst, uint8_t *value, uint16_
 	int ret;
 	char obj_path[LWM2M_MAX_PATH_STR_LEN];
 
+	ret = create_obj_if_needed(LWM2M_OBJECT_SECURITY_ID, server_inst);
+	if (ret < 0) {
+		goto exit;
+	}
+
 	snprintk(obj_path, sizeof(obj_path), "0/%d/3", server_inst);
 	ret = lwm2m_engine_set_opaque(obj_path, value, value_len);
 	if (ret < 0) {
 		goto exit;
 	}
 #if defined(CONFIG_LCZ_LWM2M_CLIENT_ENABLE_ATTRIBUTES)
-	ret = attr_set_string(ATTR_ID_lwm2m_psk_id, (char const *)value, value_len);
-	if (ret < 0) {
-		goto exit;
+	if (server_inst == LCZ_LWM2M_CLIENT_SERVER_INST_DEFAULT) {
+		ret = attr_set_string(ATTR_ID_lwm2m_psk_id, (char const *)value, value_len);
+		if (ret < 0) {
+			goto exit;
+		}
 	}
 #endif
 exit:
@@ -288,15 +358,22 @@ int lcz_lwm2m_client_set_secret_key(uint16_t server_inst, uint8_t *value, uint16
 	int ret;
 	char obj_path[LWM2M_MAX_PATH_STR_LEN];
 
+	ret = create_obj_if_needed(LWM2M_OBJECT_SECURITY_ID, server_inst);
+	if (ret < 0) {
+		goto exit;
+	}
+
 	snprintk(obj_path, sizeof(obj_path), "0/%d/5", server_inst);
 	ret = lwm2m_engine_set_opaque(obj_path, value, value_len);
 	if (ret < 0) {
 		goto exit;
 	}
 #if defined(CONFIG_LCZ_LWM2M_CLIENT_ENABLE_ATTRIBUTES)
-	ret = attr_set_byte_array(ATTR_ID_lwm2m_psk, (char const *)value, value_len);
-	if (ret < 0) {
-		goto exit;
+	if (server_inst == LCZ_LWM2M_CLIENT_SERVER_INST_DEFAULT) {
+		ret = attr_set_byte_array(ATTR_ID_lwm2m_psk, (char const *)value, value_len);
+		if (ret < 0) {
+			goto exit;
+		}
 	}
 #endif
 exit:
@@ -324,6 +401,11 @@ int lcz_lwm2m_client_set_bootstrap(uint16_t lwm2m_client_index, uint16_t server_
 		goto exit;
 	}
 
+	ret = create_obj_if_needed(LWM2M_OBJECT_SECURITY_ID, server_inst);
+	if (ret < 0) {
+		goto exit;
+	}
+
 	snprintk(obj_path, sizeof(obj_path), "0/%d/1", server_inst);
 	ret = lwm2m_engine_set_u8(obj_path, (uint8_t)enable);
 	if (ret < 0) {
@@ -331,13 +413,17 @@ int lcz_lwm2m_client_set_bootstrap(uint16_t lwm2m_client_index, uint16_t server_
 	}
 
 #if defined(CONFIG_LCZ_LWM2M_CLIENT_ENABLE_ATTRIBUTES)
-	ret = attr_set(ATTR_ID_lwm2m_bootstrap, ATTR_TYPE_BOOL, &enable, sizeof(bool), NULL);
-	if (ret < 0) {
-		goto exit;
+	if (server_inst == LCZ_LWM2M_CLIENT_SERVER_INST_DEFAULT) {
+		ret = attr_set(ATTR_ID_lwm2m_bootstrap, ATTR_TYPE_BOOL, &enable, sizeof(bool),
+			       NULL);
+		if (ret < 0) {
+			goto exit;
+		}
 	}
 #endif
 
 	if (enable) {
+		LOG_DBG("Enabling bootstrap");
 		/* Create 2nd instance of security object needed for bootstrap */
 		snprintk(obj_path, sizeof(obj_path), "0/%d", server_inst + 1);
 		ret = lwm2m_engine_create_obj_inst(obj_path);
@@ -347,7 +433,7 @@ int lcz_lwm2m_client_set_bootstrap(uint16_t lwm2m_client_index, uint16_t server_
 	} else {
 		/* Delete second security instance because it is not needed */
 		snprintk(obj_path, sizeof(obj_path), "0/%d", server_inst + 1);
-		lwm2m_engine_create_obj_inst(obj_path);
+		lwm2m_engine_delete_obj_inst(obj_path);
 
 		/* Match Security object instance with a Server object instance with
 		 * Short Server ID.
@@ -357,16 +443,24 @@ int lcz_lwm2m_client_set_bootstrap(uint16_t lwm2m_client_index, uint16_t server_
 		if (ret < 0) {
 			goto exit;
 		}
+
+		ret = create_obj_if_needed(LWM2M_OBJECT_SERVER_ID, server_inst);
+		if (ret < 0) {
+			goto exit;
+		}
+
 		snprintk(obj_path, sizeof(obj_path), "1/%d/0", server_inst);
 		ret = lwm2m_engine_set_u16(obj_path, short_server_id);
 		if (ret < 0) {
 			goto exit;
 		}
 #if defined(CONFIG_LCZ_LWM2M_CLIENT_ENABLE_ATTRIBUTES)
-		ret = attr_set(ATTR_ID_lwm2m_short_id, ATTR_TYPE_U16, &short_server_id,
-			       sizeof(uint16_t), NULL);
-		if (ret < 0) {
-			goto exit;
+		if (server_inst == LCZ_LWM2M_CLIENT_SERVER_INST_DEFAULT) {
+			ret = attr_set(ATTR_ID_lwm2m_short_id, ATTR_TYPE_U16, &short_server_id,
+				       sizeof(uint16_t), NULL);
+			if (ret < 0) {
+				goto exit;
+			}
 		}
 #endif
 	}
@@ -402,7 +496,8 @@ int lcz_lwm2m_client_unregister_event_callback(struct lcz_lwm2m_client_event_cal
 }
 
 int lcz_lwm2m_client_connect(int lwm2m_client_index, int init_sec_obj_inst, int init_srv_obj_inst,
-			     char *endpoint_name, lcz_lwm2m_client_transport_t transport)
+			     char *endpoint_name, lcz_lwm2m_client_transport_t transport,
+			     int security_tag)
 {
 	int ret = 0;
 	uint32_t flags;
@@ -415,9 +510,9 @@ int lcz_lwm2m_client_connect(int lwm2m_client_index, int init_sec_obj_inst, int 
 			flags = lwc_inst->bootstrap_enabled ? LWM2M_RD_CLIENT_FLAG_BOOTSTRAP : 0;
 
 			(void)memset(&lwc_inst->client, 0, sizeof(lwc_inst->client));
-#if defined(CONFIG_LCZ_LWM2M_CLIENT_TLS_TAG)
-			lwc_inst->client.tls_tag = CONFIG_LCZ_LWM2M_CLIENT_TLS_TAG;
-#endif
+			if (security_tag >= 0) {
+				lwc_inst->client.tls_tag = security_tag;
+			}
 
 #if defined(CONFIG_LCZ_LWM2M_TRANSPORT_UDP)
 			if (transport == LCZ_LWM2M_CLIENT_TRANSPORT_UDP) {
@@ -438,8 +533,11 @@ int lcz_lwm2m_client_connect(int lwm2m_client_index, int init_sec_obj_inst, int 
 					      init_srv_obj_inst, &lwc_inst->client, endpoint_name,
 					      flags, rd_client_event, NULL);
 #if defined(CONFIG_LCZ_LWM2M_CLIENT_ENABLE_ATTRIBUTES)
-			(void)attr_set_string(ATTR_ID_lwm2m_endpoint, (char const *)endpoint_name,
-					      strlen(endpoint_name));
+			if (lwm2m_client_index == LCZ_LWM2M_CLIENT_SERVER_INST_DEFAULT) {
+				(void)attr_set_string(ATTR_ID_lwm2m_endpoint,
+						      (char const *)endpoint_name,
+						      strlen(endpoint_name));
+			}
 #endif
 			lwc_inst->connection_started = true;
 		}
@@ -538,20 +636,11 @@ int lcz_lwm2m_client_set_available_power_source(uint16_t res_inst,
 {
 	int ret;
 	char obj_path[LWM2M_MAX_PATH_STR_LEN];
-	uint8_t data;
-	uint16_t data_len;
-	uint8_t *data_ptr;
-	uint8_t flags;
 
-	snprintk(obj_path, sizeof(obj_path), "3/0/6/%d", res_inst);
-
-	data_len = sizeof(data);
-	data_ptr = &data;
-	ret = lwm2m_engine_get_res_data(obj_path, (void **)&data_ptr, &data_len, &flags);
+	ret = create_res_if_needed(LWM2M_OBJECT_DEVICE_ID, 0, 6, res_inst);
 	if (ret < 0) {
-		(void)lwm2m_engine_create_res_inst(obj_path);
+		goto exit;
 	}
-
 #if defined(CONFIG_LCZ_LWM2M_CLIENT_ENABLE_ATTRIBUTES)
 	if (res_inst == 0) {
 		ret = attr_set_uint32(ATTR_ID_lwm2m_pwr_src, *src);
@@ -560,6 +649,8 @@ int lcz_lwm2m_client_set_available_power_source(uint16_t res_inst,
 		}
 	}
 #endif
+
+	snprintk(obj_path, sizeof(obj_path), "3/0/6/%d", res_inst);
 	ret = lwm2m_engine_set_res_data(obj_path, src, sizeof(uint8_t), LWM2M_RES_DATA_FLAG_RO);
 
 exit:
@@ -570,18 +661,10 @@ int lcz_lwm2m_client_set_power_source_voltage(uint16_t res_inst, int32_t *milliv
 {
 	int ret;
 	char obj_path[LWM2M_MAX_PATH_STR_LEN];
-	uint8_t data;
-	uint16_t data_len;
-	uint8_t *data_ptr;
-	uint8_t flags;
 
-	snprintk(obj_path, sizeof(obj_path), "3/0/7/%d", res_inst);
-
-	data_len = sizeof(data);
-	data_ptr = &data;
-	ret = lwm2m_engine_get_res_data(obj_path, (void **)&data_ptr, &data_len, &flags);
+	ret = create_res_if_needed(LWM2M_OBJECT_DEVICE_ID, 0, 7, res_inst);
 	if (ret < 0) {
-		(void)lwm2m_engine_create_res_inst(obj_path);
+		goto exit;
 	}
 
 #if defined(CONFIG_LCZ_LWM2M_CLIENT_ENABLE_ATTRIBUTES)
@@ -592,6 +675,8 @@ int lcz_lwm2m_client_set_power_source_voltage(uint16_t res_inst, int32_t *milliv
 		}
 	}
 #endif
+
+	snprintk(obj_path, sizeof(obj_path), "3/0/7/%d", res_inst);
 	ret = lwm2m_engine_set_res_data(obj_path, millivolts, sizeof(int32_t),
 					LWM2M_RES_DATA_FLAG_RO);
 exit:

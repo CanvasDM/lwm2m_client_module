@@ -74,6 +74,8 @@ struct lcz_lwm2m_client_event_callback_agent {
  * "default index" is the only index allowed to use LwM2M bootstrapping.
  */
 #define LCZ_LWM2M_CLIENT_IDX_DEFAULT 0
+/* The default client index will use this default server instance for object 0 */
+#define LCZ_LWM2M_CLIENT_SERVER_INST_DEFAULT 0
 
 /* Defines for SMP over BLE tunnel for CoAP/LwM2M */
 #define LCZ_COAP_MGMT_OP_NOTIFY 4
@@ -178,12 +180,17 @@ int lcz_lwm2m_client_unregister_event_callback(struct lcz_lwm2m_client_event_cal
 /**
  * @brief Start the LwM2M client connection
  *
+ * @param lwm2m_client_index index of the client
+ * @param init_sec_obj_inst security object instance associated with the client
+ * @param init_srv_obj_inst server object instance associated with the client
  * @param endpoint_name Name of the endpoint
  * @param transport Transport type
+ * @param security_tag TLS security tag
  * @return int 0 on success, < 0 on error
  */
 int lcz_lwm2m_client_connect(int lwm2m_client_index, int init_sec_obj_inst, int init_srv_obj_inst,
-			     char *endpoint_name, lcz_lwm2m_client_transport_t transport);
+			     char *endpoint_name, lcz_lwm2m_client_transport_t transport,
+			     int security_tag);
 
 /**
  * @brief Disconnect the LwM2M client

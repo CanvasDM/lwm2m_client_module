@@ -510,9 +510,11 @@ int lcz_lwm2m_client_connect(int lwm2m_client_index, int init_sec_obj_inst, int 
 			flags = lwc_inst->bootstrap_enabled ? LWM2M_RD_CLIENT_FLAG_BOOTSTRAP : 0;
 
 			(void)memset(&lwc_inst->client, 0, sizeof(lwc_inst->client));
+#if defined(CONFIG_LCZ_LWM2M_DTLS_SUPPORT)
 			if (security_tag >= 0) {
 				lwc_inst->client.tls_tag = security_tag;
 			}
+#endif
 
 #if defined(CONFIG_LCZ_LWM2M_TRANSPORT_UDP)
 			if (transport == LCZ_LWM2M_CLIENT_TRANSPORT_UDP) {

@@ -203,6 +203,7 @@ static int lwm2m_transport_ble_peripheral_send(struct lwm2m_ctx *client_ctx, con
 	size_t payload_len;
 	size_t total_len;
 	uint16_t mtu;
+	char *data_ptr;
 
 	/* Acquire a mutex lock for our data */
 	k_mutex_lock(&smp_mutex, K_FOREVER);
@@ -238,24 +239,32 @@ static int lwm2m_transport_ble_peripheral_send(struct lwm2m_ctx *client_ctx, con
 		if (ok) {
 			payload_len = (size_t)(zs[0].payload - smp_notif.buffer);
 			total_len = sizeof(smp_notif.header) + payload_len;
+			smp_notif.header.op = LCZ_COAP_MGMT_OP_NOTIFY;
+			smp_notif.header.flags = 0;
+			smp_notif.header.len_h8 = (uint8_t)((payload_len >> 8) & 0xFF);
+			smp_notif.header.len_l8 = (uint8_t)((payload_len >> 0) & 0xFF);
+			smp_notif.header.group_h8 =
+				(CONFIG_LCZ_LWM2M_TRANSPORT_BLE_SMP_GROUP >> 8) & 0xFF;
+			smp_notif.header.group_l8 =
+				(CONFIG_LCZ_LWM2M_TRANSPORT_BLE_SMP_GROUP >> 0) & 0xFF;
+			smp_notif.header.seq = 0;
+			smp_notif.header.id = LCZ_COAP_MGMT_ID_TUNNEL_DATA;
+
+			/* Send chunks of the message to fit into the MTU */
+			data_ptr = (char *)&smp_notif;
 			mtu = bt_gatt_get_mtu(active_ble_conn);
-			if (total_len > BT_MAX_PAYLOAD(mtu)) {
-				err = -EMSGSIZE;
-			} else {
-				smp_notif.header.op = LCZ_COAP_MGMT_OP_NOTIFY;
-				smp_notif.header.flags = 0;
-				smp_notif.header.len_h8 = (uint8_t)((payload_len >> 8) & 0xFF);
-				smp_notif.header.len_l8 = (uint8_t)((payload_len >> 0) & 0xFF);
-				smp_notif.header.group_h8 =
-					(CONFIG_LCZ_LWM2M_TRANSPORT_BLE_SMP_GROUP >> 8) & 0xFF;
-				smp_notif.header.group_l8 =
-					(CONFIG_LCZ_LWM2M_TRANSPORT_BLE_SMP_GROUP >> 0) & 0xFF;
-				smp_notif.header.seq = 0;
-				smp_notif.header.id = LCZ_COAP_MGMT_ID_TUNNEL_DATA;
-				err = smp_bt_notify(active_ble_conn, &smp_notif, total_len);
+			while (total_len > 0) {
+				size_t this_len = total_len;
+				if (this_len > BT_MAX_PAYLOAD(mtu)) {
+					this_len = BT_MAX_PAYLOAD(mtu);
+				}
+				err = smp_bt_notify(active_ble_conn, data_ptr, this_len);
 				if (err < 0) {
 					LOG_ERR("CoAP tunnel notify failed: %d", err);
+					break;
 				}
+				total_len -= this_len;
+				data_ptr += this_len;
 			}
 		} else {
 			/* Most likely failed because message doesn't fit into buffer */

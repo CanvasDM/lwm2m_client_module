@@ -186,6 +186,14 @@ int lcz_lwm2m_client_unregister_event_callback(struct lcz_lwm2m_client_event_cal
 int lcz_lwm2m_client_register_get_time_callback(lwm2m_engine_get_data_cb_t cb);
 
 /**
+ * @brief Register a callback that will be invoked when resource /3/0/5 is executed
+ *
+ * @param cb callback function
+ * @return int 0 on success, < 0 on error
+ */
+int lcz_lwm2m_client_register_factory_default_callback(lwm2m_engine_execute_cb_t cb);
+
+/**
  * @brief Start the LwM2M client connection
  *
  * @param lwm2m_client_index index of the client

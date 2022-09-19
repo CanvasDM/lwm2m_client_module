@@ -304,6 +304,14 @@ int lcz_lwm2m_client_set_battery_status(lcz_lwm2m_client_device_battery_status_t
  */
 void lcz_lwm2m_client_reboot(void);
 
+/**
+ * @brief Set device error code (3/0/11/x)
+ *
+ * @param err error state (see include/zephyr/net/lwm2m.h for err defines)
+ * @return int 0 on success, < 0 on error
+ */
+int lcz_lwm2m_client_device_set_err(uint8_t err);
+
 #if defined(CONFIG_LCZ_LWM2M_TRANSPORT_BLE_PERIPHERAL)
 /**
  * @brief Register a handler for advertising flag state changes

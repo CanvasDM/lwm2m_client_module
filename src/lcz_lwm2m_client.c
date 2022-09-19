@@ -685,6 +685,11 @@ exit:
 	return ret;
 }
 
+int lcz_lwm2m_client_device_set_err(uint8_t err)
+{
+	return lwm2m_device_add_err(err);
+}
+
 int lcz_lwm2m_client_set_software_version(char *value)
 {
 	int ret;

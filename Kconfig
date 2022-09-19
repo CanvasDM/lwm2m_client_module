@@ -229,4 +229,9 @@ config LCZ_LWM2M_CLIENT_DEVICE_BATT_STAT
 
 endif # LCZ_LWM2M_CLIENT_DEVICE_INIT_KCONFIG
 
+config LCZ_LWM2M_CLIENT_SHELL
+	bool "LwM2M Client Shell"
+	help
+	  Enable client shell commands
+
 endif # LCZ_LWM2M_CLIENT

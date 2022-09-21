@@ -29,17 +29,18 @@ LOG_MODULE_REGISTER(lcz_lwm2m_ble_peripheral, CONFIG_LCZ_LWM2M_CLIENT_LOG_LEVEL)
 #include <bluetooth/gatt_dm.h>
 #include <bluetooth/services/dfu_smp.h>
 #include <bluetooth/bluetooth.h>
-
 #include <mgmt/mgmt.h>
 #include <mgmt/mcumgr/smp_bt.h>
-
 #include <zcbor_common.h>
 #include <zcbor_encode.h>
 #include <zcbor_decode.h>
+#include <zcbor_bulk/zcbor_bulk_priv.h>
 
 #include <lcz_lwm2m.h>
-
 #include "lcz_bluetooth.h"
+#if defined(CONFIG_LCZ_PKI_AUTH_SMP_PERIPHERAL)
+#include "lcz_pki_auth_smp.h"
+#endif
 #include "lcz_lwm2m_client.h"
 
 /**************************************************************************************************/
@@ -63,7 +64,7 @@ struct queue_entry_t {
 
 struct smp_notification {
 	struct bt_dfu_smp_header header;
-	uint8_t buffer[LCZ_COAP_MGMT_MAX_COAP_PACKET_SIZE];
+	uint8_t buffer[1];
 } __packed;
 
 /**************************************************************************************************/
@@ -86,6 +87,12 @@ static char *lwm2m_transport_ble_peripheral_print_addr(struct lwm2m_ctx *client_
 static int smp_coap_open_tunnel(struct mgmt_ctxt *ctxt);
 static int smp_coap_tunnel_data(struct mgmt_ctxt *ctxt);
 static int smp_coap_close_tunnel(struct mgmt_ctxt *ctxt);
+#if defined(CONFIG_LCZ_PKI_AUTH_SMP_PERIPHERAL)
+static int smp_coap_tunnel_enc_data(struct mgmt_ctxt *ctxt);
+static int send_tunnel_enc_data(struct lwm2m_ctx *client_ctx, psa_key_id_t enc_key,
+				const uint8_t *data, uint32_t datalen);
+#endif
+static int send_tunnel_data(struct lwm2m_ctx *client_ctx, const uint8_t *data, uint32_t datalen);
 
 static int add_to_queue(struct k_fifo *queue, const uint8_t *data, size_t len);
 
@@ -122,6 +129,12 @@ static const struct mgmt_handler coap_mgmt_handlers[] = {
         .mh_read = NULL,
         .mh_write = smp_coap_close_tunnel,
     },
+#if defined(CONFIG_LCZ_PKI_AUTH_SMP_PERIPHERAL)
+    [LCZ_COAP_MGMT_ID_TUNNEL_ENC_DATA] = {
+        .mh_read = NULL,
+        .mh_write = smp_coap_tunnel_enc_data,
+    },
+#endif
 };
 
 static struct mgmt_group coap_mgmt_group = {
@@ -150,9 +163,6 @@ static bool server_tunnel_open = false;
 
 /** Currently active BT connection */
 static struct bt_conn *active_ble_conn = NULL;
-
-/** Storage for an SMP notification message */
-static struct smp_notification smp_notif;
 
 /** Queue for storing receive messages */
 static struct k_fifo rx_queue;
@@ -196,80 +206,24 @@ static int lwm2m_transport_ble_peripheral_start(struct lwm2m_ctx *client_ctx)
 static int lwm2m_transport_ble_peripheral_send(struct lwm2m_ctx *client_ctx, const uint8_t *data,
 					       uint32_t datalen)
 {
-	zcbor_state_t zs[CONFIG_MGMT_MAX_DECODING_LEVELS + 2];
-	struct zcbor_string zstr;
-	bool ok;
+#if defined(CONFIG_LCZ_PKI_AUTH_SMP_PERIPHERAL)
+	psa_key_id_t enc_key = PSA_KEY_HANDLE_INIT;
+#endif
 	int err = -ENOTCONN;
-	size_t payload_len;
-	size_t total_len;
-	uint16_t mtu;
-	char *data_ptr;
 
 	/* Acquire a mutex lock for our data */
 	k_mutex_lock(&smp_mutex, K_FOREVER);
 
 	if (server_tunnel_open && active_ble_conn) {
-		/* Build the CBOR message */
-		zcbor_new_state(zs, sizeof(zs) / sizeof(zs[0]), smp_notif.buffer,
-				sizeof(smp_notif.buffer), 1);
-		ok = zcbor_map_start_encode(zs, 1);
-		if (ok) {
-			zstr.len = strlen(LCZ_COAP_CBOR_KEY_TUNNEL_ID);
-			zstr.value = LCZ_COAP_CBOR_KEY_TUNNEL_ID;
-			ok = zcbor_tstr_encode(zs, &zstr);
-		}
-		if (ok) {
-			ok = zcbor_uint32_encode(zs, &transport_tunnel_id);
-		}
-		if (ok) {
-			zstr.len = strlen(LCZ_COAP_CBOR_KEY_DATA);
-			zstr.value = LCZ_COAP_CBOR_KEY_DATA;
-			ok = zcbor_tstr_encode(zs, &zstr);
-		}
-		if (ok) {
-			zstr.len = datalen;
-			zstr.value = data;
-			ok = zcbor_bstr_encode(zs, &zstr);
-		}
-		if (ok) {
-			ok = zcbor_map_end_encode(zs, 1);
-		}
-
-		/* Send the message */
-		if (ok) {
-			payload_len = (size_t)(zs[0].payload - smp_notif.buffer);
-			total_len = sizeof(smp_notif.header) + payload_len;
-			smp_notif.header.op = LCZ_COAP_MGMT_OP_NOTIFY;
-			smp_notif.header.flags = 0;
-			smp_notif.header.len_h8 = (uint8_t)((payload_len >> 8) & 0xFF);
-			smp_notif.header.len_l8 = (uint8_t)((payload_len >> 0) & 0xFF);
-			smp_notif.header.group_h8 =
-				(CONFIG_LCZ_LWM2M_TRANSPORT_BLE_SMP_GROUP >> 8) & 0xFF;
-			smp_notif.header.group_l8 =
-				(CONFIG_LCZ_LWM2M_TRANSPORT_BLE_SMP_GROUP >> 0) & 0xFF;
-			smp_notif.header.seq = 0;
-			smp_notif.header.id = LCZ_COAP_MGMT_ID_TUNNEL_DATA;
-
-			/* Send chunks of the message to fit into the MTU */
-			data_ptr = (char *)&smp_notif;
-			mtu = bt_gatt_get_mtu(active_ble_conn);
-			while (total_len > 0) {
-				size_t this_len = total_len;
-				if (this_len > BT_MAX_PAYLOAD(mtu)) {
-					this_len = BT_MAX_PAYLOAD(mtu);
-				}
-				err = smp_bt_notify(active_ble_conn, data_ptr, this_len);
-				if (err < 0) {
-					LOG_ERR("CoAP tunnel notify failed: %d", err);
-					break;
-				}
-				total_len -= this_len;
-				data_ptr += this_len;
-			}
-		} else {
-			/* Most likely failed because message doesn't fit into buffer */
-			LOG_ERR("SMP notification failed for CoAP message of %d bytes", datalen);
-			err = -EMSGSIZE;
+#if defined(CONFIG_LCZ_PKI_AUTH_SMP_PERIPHERAL)
+		if (lcz_pki_auth_smp_periph_get_keys(&enc_key, NULL) == 0) {
+			/* If we can get a key, send an encrypted message */
+			err = send_tunnel_enc_data(client_ctx, enc_key, data, datalen);
+		} else
+#endif
+		{
+			/* If we can't get a key, send an unencrypted message */
+			err = send_tunnel_data(client_ctx, data, datalen);
 		}
 	}
 
@@ -474,47 +428,63 @@ static int smp_coap_open_tunnel(struct mgmt_ctxt *ctxt)
 /* Handler for SMP Tunnel Data message */
 static int smp_coap_tunnel_data(struct mgmt_ctxt *ctxt)
 {
-	uint32_t tunnel_id;
-	struct zcbor_string key;
-	struct zcbor_string value;
+	uint32_t tunnel_id = 0;
+	struct zcbor_string data;
 	zcbor_state_t *zsd = ctxt->cnbd->zs;
 	zcbor_state_t *zse = ctxt->cnbe->zs;
 	eventfd_t event_val;
+	int rc = 0;
+	bool ok;
+	size_t decoded;
 
-	if (zcbor_map_start_decode(zsd) == false || zcbor_tstr_decode(zsd, &key) == false ||
-	    key.len != strlen(LCZ_COAP_CBOR_KEY_TUNNEL_ID) ||
-	    strncmp(key.value, LCZ_COAP_CBOR_KEY_TUNNEL_ID, strlen(LCZ_COAP_CBOR_KEY_TUNNEL_ID)) !=
-		    0 ||
-	    zcbor_uint32_decode(zsd, &tunnel_id) == false ||
-	    zcbor_tstr_decode(zsd, &key) == false || key.len != strlen(LCZ_COAP_CBOR_KEY_DATA) ||
-	    strncmp(key.value, LCZ_COAP_CBOR_KEY_DATA, strlen(LCZ_COAP_CBOR_KEY_DATA)) != 0 ||
-	    zcbor_bstr_decode(zsd, &value) == false || value.len == 0 ||
-	    zcbor_map_end_decode(zsd) == false) {
-		return MGMT_ERR_EUNKNOWN;
+	struct zcbor_map_decode_key_val tunnel_data_decode[] = {
+		ZCBOR_MAP_DECODE_KEY_VAL(i, zcbor_uint32_decode, &tunnel_id),
+		ZCBOR_MAP_DECODE_KEY_VAL(d, zcbor_bstr_decode, &data)
+	};
+
+#if defined(CONFIG_LCZ_PKI_AUTH_SMP_PERIPHERAL)
+	/* If we are authorized, we shouldn't be getting the unencrypted message */
+	if (lcz_pki_auth_smp_periph_get_keys(NULL, NULL) == 0) {
+		LOG_ERR("smp_coap_tunnel_data: Connection is authorized, expected encrypted tunnel data");
+		rc = -EPERM;
+	}
+#endif
+
+	/* Parse the input */
+	if (rc == 0) {
+		ok = zcbor_map_decode_bulk(zsd, tunnel_data_decode, ARRAY_SIZE(tunnel_data_decode),
+					   &decoded) == 0;
+		if (!ok || data.len == 0) {
+			LOG_ERR("smp_coap_tunnel_data: Invalid input");
+			rc = -EINVAL;
+		}
 	}
 
 	/* Validate the tunnel ID */
-	if (tunnel_id != transport_tunnel_id) {
-		/* Just ignore this message and return an "error" */
-		tunnel_id = 0;
-	} else if (server_tunnel_open) {
-		/* Acquire a mutex lock for our data */
-		k_mutex_lock(&smp_mutex, K_FOREVER);
+	if (rc == 0) {
+		if (tunnel_id != transport_tunnel_id) {
+			/* Just ignore this message and return an "error" */
+			tunnel_id = 0;
+		} else if (server_tunnel_open) {
+			/* Acquire a mutex lock for our data */
+			k_mutex_lock(&smp_mutex, K_FOREVER);
 
-		/* Restart the ID timeout work */
-		k_work_reschedule_for_queue(
-			&k_sys_work_q, &tunnel_id_timeout_work,
-			K_SECONDS(CONFIG_LCZ_LWM2M_ENGINE_DEFAULT_LIFETIME + TUNNEL_TIMEOUT_GRACE));
+			/* Restart the ID timeout work */
+			k_work_reschedule_for_queue(
+				&k_sys_work_q, &tunnel_id_timeout_work,
+				K_SECONDS(CONFIG_LCZ_LWM2M_ENGINE_DEFAULT_LIFETIME +
+					  TUNNEL_TIMEOUT_GRACE));
 
-		/* Add it to our RX queue */
-		if (add_to_queue(&rx_queue, value.value, value.len) == 0) {
-			/* Signal the event FD that data is ready to be read */
-			event_val = EVENTFD_DATA_READY;
-			(void)eventfd_write(smp_socket, event_val);
+			/* Add it to our RX queue */
+			if (add_to_queue(&rx_queue, data.value, data.len) == 0) {
+				/* Signal the event FD that data is ready to be read */
+				event_val = EVENTFD_DATA_READY;
+				(void)eventfd_write(smp_socket, event_val);
+			}
+
+			/* Release the mutex lock for our data */
+			k_mutex_unlock(&smp_mutex);
 		}
-
-		/* Release the mutex lock for our data */
-		k_mutex_unlock(&smp_mutex);
 	}
 
 	/* Send the response */
@@ -561,6 +531,369 @@ static int smp_coap_close_tunnel(struct mgmt_ctxt *ctxt)
 		return MGMT_ERR_ENOMEM;
 	}
 }
+
+#if defined(CONFIG_LCZ_PKI_AUTH_SMP_PERIPHERAL)
+/* Handler for SMP Tunnel Encrypted Data message */
+static int smp_coap_tunnel_enc_data(struct mgmt_ctxt *ctxt)
+{
+	uint32_t tunnel_id = 0;
+	struct zcbor_string data;
+	zcbor_state_t *zsd = ctxt->cnbd->zs;
+	zcbor_state_t *zse = ctxt->cnbe->zs;
+	eventfd_t event_val;
+	int rc = 0;
+	bool ok;
+	size_t decoded;
+	psa_key_id_t enc_key = PSA_KEY_HANDLE_INIT;
+	size_t nonce_len;
+	size_t plaintext_size;
+	size_t plaintext_out;
+	uint8_t *plaintext = NULL;
+
+	struct zcbor_map_decode_key_val tunnel_data_decode[] = {
+		ZCBOR_MAP_DECODE_KEY_VAL(i, zcbor_uint32_decode, &tunnel_id),
+		ZCBOR_MAP_DECODE_KEY_VAL(d, zcbor_bstr_decode, &data)
+	};
+
+	/* If we are not authorized, we shouldn't be getting the encrypted message */
+	if (lcz_pki_auth_smp_periph_get_keys(&enc_key, NULL) != 0) {
+		LOG_ERR("smp_coap_tunnel_enc_data: Connection is not authorized, expected unencrypted tunnel data");
+		rc = -EPERM;
+	}
+
+	/* Parse the input */
+	if (rc == 0) {
+		ok = zcbor_map_decode_bulk(zsd, tunnel_data_decode, ARRAY_SIZE(tunnel_data_decode),
+					   &decoded) == 0;
+		if (!ok || data.len == 0) {
+			LOG_ERR("smp_coap_tunnel_enc_data: Invalid input");
+			rc = -EINVAL;
+		}
+	}
+
+	/* Validate the tunnel ID */
+	if (rc == 0) {
+		if (tunnel_id != transport_tunnel_id) {
+			/* Just ignore this message and return an "error" */
+			tunnel_id = 0;
+		} else if (server_tunnel_open) {
+			/* Acquire a mutex lock for our data */
+			k_mutex_lock(&smp_mutex, K_FOREVER);
+
+			/* Restart the ID timeout work */
+			k_work_reschedule_for_queue(
+				&k_sys_work_q, &tunnel_id_timeout_work,
+				K_SECONDS(CONFIG_LCZ_LWM2M_ENGINE_DEFAULT_LIFETIME +
+					  TUNNEL_TIMEOUT_GRACE));
+
+			/* Calculate sizes */
+			nonce_len = PSA_AEAD_NONCE_LENGTH(LCZ_PKI_AUTH_SMP_SESSION_KEY_TYPE,
+							  LCZ_PKI_AUTH_SMP_SESSION_ENC_KEY_ALG);
+			plaintext_size =
+				PSA_AEAD_DECRYPT_OUTPUT_SIZE(LCZ_PKI_AUTH_SMP_SESSION_KEY_TYPE,
+							     LCZ_PKI_AUTH_SMP_SESSION_ENC_KEY_ALG,
+							     data.len - nonce_len);
+
+			/* Allocate memory to hold the plaintext */
+			plaintext = (uint8_t *)k_malloc(plaintext_size);
+			if (plaintext == NULL) {
+				LOG_ERR("smp_coap_tunnel_enc_data: Cannot allocate plaintext buffer");
+				rc = -ENOMEM;
+			}
+
+			/* Decrypt the data */
+			if (rc == 0) {
+				rc = psa_aead_decrypt(enc_key, LCZ_PKI_AUTH_SMP_SESSION_ENC_KEY_ALG,
+						      data.value, nonce_len,
+						      (uint8_t *)&transport_tunnel_id,
+						      sizeof(transport_tunnel_id),
+						      data.value + nonce_len, data.len - nonce_len,
+						      plaintext, plaintext_size, &plaintext_out);
+				if (rc != PSA_SUCCESS) {
+					LOG_ERR("smp_coap_tunnel_enc_data: failed to decrypt: %d",
+						rc);
+				}
+			}
+
+			/* Add it to our RX queue */
+			if (rc == 0) {
+				if (add_to_queue(&rx_queue, plaintext, plaintext_out) == 0) {
+					/* Signal the event FD that data is ready to be read */
+					event_val = EVENTFD_DATA_READY;
+					(void)eventfd_write(smp_socket, event_val);
+				}
+			}
+
+			if (plaintext != NULL) {
+				k_free(plaintext);
+			}
+
+			/* Release the mutex lock for our data */
+			k_mutex_unlock(&smp_mutex);
+		}
+	}
+
+	/* Send the response */
+	if (zcbor_tstr_put_lit(zse, LCZ_COAP_CBOR_KEY_TUNNEL_ID) &&
+	    zcbor_uint32_put(zse, tunnel_id)) {
+		return MGMT_ERR_EOK;
+	} else {
+		return MGMT_ERR_ENOMEM;
+	}
+}
+#endif
+
+static int send_tunnel_data(struct lwm2m_ctx *client_ctx, const uint8_t *data, uint32_t datalen)
+{
+	zcbor_state_t zs[CONFIG_MGMT_MAX_DECODING_LEVELS + 2];
+	struct smp_notification *smp_notif = NULL;
+	struct zcbor_string zstr;
+	bool ok;
+	int err = 0;
+	size_t buffer_len;
+	size_t payload_len;
+	size_t total_len;
+	uint16_t mtu;
+	char *data_ptr;
+
+	/* Compute the message size */
+	buffer_len = sizeof(struct bt_dfu_smp_header) + LCZ_COAP_TUNNEL_CBOR_OVERHEAD + datalen;
+	if (buffer_len > CONFIG_LCZ_LWM2M_TRANSPORT_BLE_MAX_PACKET) {
+		LOG_ERR("send_tunnel_data: packet too large: %d", buffer_len);
+		err = -EMSGSIZE;
+	}
+
+	/* Allocate memory to hold the message */
+	if (err == 0) {
+		smp_notif = (struct smp_notification *)k_malloc(buffer_len);
+		if (smp_notif == NULL) {
+			err = -ENOMEM;
+		}
+	}
+
+	/* Build the CBOR message */
+	if (err == 0) {
+		zcbor_new_state(zs, sizeof(zs) / sizeof(zs[0]), smp_notif->buffer,
+				LCZ_COAP_TUNNEL_CBOR_OVERHEAD + datalen, 1);
+		ok = zcbor_map_start_encode(zs, 1);
+		if (ok) {
+			zstr.len = strlen(LCZ_COAP_CBOR_KEY_TUNNEL_ID);
+			zstr.value = LCZ_COAP_CBOR_KEY_TUNNEL_ID;
+			ok = zcbor_tstr_encode(zs, &zstr);
+		}
+		if (ok) {
+			ok = zcbor_uint32_encode(zs, &transport_tunnel_id);
+		}
+		if (ok) {
+			zstr.len = strlen(LCZ_COAP_CBOR_KEY_DATA);
+			zstr.value = LCZ_COAP_CBOR_KEY_DATA;
+			ok = zcbor_tstr_encode(zs, &zstr);
+		}
+		if (ok) {
+			zstr.len = datalen;
+			zstr.value = data;
+			ok = zcbor_bstr_encode(zs, &zstr);
+		}
+		if (ok) {
+			ok = zcbor_map_end_encode(zs, 1);
+		}
+		if (!ok) {
+			/* Most likely failed because message doesn't fit into buffer */
+			LOG_ERR("send_tunnel_data: Failed to encode message of %d bytes", datalen);
+			err = -EMSGSIZE;
+		}
+	}
+
+	/* Send the message */
+	if (err == 0) {
+		payload_len = (size_t)(zs[0].payload - smp_notif->buffer);
+		total_len = sizeof(smp_notif->header) + payload_len;
+		smp_notif->header.op = LCZ_COAP_MGMT_OP_NOTIFY;
+		smp_notif->header.flags = 0;
+		smp_notif->header.len_h8 = (uint8_t)((payload_len >> 8) & 0xFF);
+		smp_notif->header.len_l8 = (uint8_t)((payload_len >> 0) & 0xFF);
+		smp_notif->header.group_h8 = (CONFIG_LCZ_LWM2M_TRANSPORT_BLE_SMP_GROUP >> 8) & 0xFF;
+		smp_notif->header.group_l8 = (CONFIG_LCZ_LWM2M_TRANSPORT_BLE_SMP_GROUP >> 0) & 0xFF;
+		smp_notif->header.seq = 0;
+		smp_notif->header.id = LCZ_COAP_MGMT_ID_TUNNEL_DATA;
+
+		/* Send chunks of the message to fit into the MTU */
+		data_ptr = (char *)smp_notif;
+		mtu = bt_gatt_get_mtu(active_ble_conn);
+		while (total_len > 0) {
+			size_t this_len = total_len;
+			if (this_len > BT_MAX_PAYLOAD(mtu)) {
+				this_len = BT_MAX_PAYLOAD(mtu);
+			}
+			err = smp_bt_notify(active_ble_conn, data_ptr, this_len);
+			if (err < 0) {
+				LOG_ERR("send_tunnel_data: notify failed: %d", err);
+				break;
+			}
+			total_len -= this_len;
+			data_ptr += this_len;
+		}
+	}
+
+	/* Free memory that we allocated */
+	if (smp_notif != NULL) {
+		k_free(smp_notif);
+	}
+
+	return err;
+}
+
+#if defined(CONFIG_LCZ_PKI_AUTH_SMP_PERIPHERAL)
+static int send_tunnel_enc_data(struct lwm2m_ctx *client_ctx, psa_key_id_t enc_key,
+				const uint8_t *data, uint32_t datalen)
+{
+	zcbor_state_t zs[CONFIG_MGMT_MAX_DECODING_LEVELS + 2];
+	struct smp_notification *smp_notif = NULL;
+	struct zcbor_string zstr;
+	bool ok;
+	int err = 0;
+	size_t buffer_len;
+	size_t payload_len;
+	size_t total_len;
+	uint16_t mtu;
+	char *data_ptr;
+	size_t nonce_len;
+	size_t ciphertext_size;
+	size_t ciphertext_out_size;
+	uint8_t *ciphertext = NULL;
+
+	/* Compute the ciphertext size */
+	nonce_len = PSA_AEAD_NONCE_LENGTH(LCZ_PKI_AUTH_SMP_SESSION_KEY_TYPE,
+					  LCZ_PKI_AUTH_SMP_SESSION_ENC_KEY_ALG);
+	ciphertext_size =
+		nonce_len + PSA_AEAD_ENCRYPT_OUTPUT_SIZE(LCZ_PKI_AUTH_SMP_SESSION_KEY_TYPE,
+							 LCZ_PKI_AUTH_SMP_SESSION_ENC_KEY_ALG,
+							 datalen);
+
+	/* Compute the message size */
+	buffer_len =
+		sizeof(struct bt_dfu_smp_header) + LCZ_COAP_TUNNEL_CBOR_OVERHEAD + ciphertext_size;
+	if (buffer_len > CONFIG_LCZ_LWM2M_TRANSPORT_BLE_MAX_PACKET) {
+		LOG_ERR("send_tunnel_enc_data: packet too large: %d", buffer_len);
+		err = -EMSGSIZE;
+	}
+
+	/* Allocate memory for the ciphertext */
+	if (err == 0) {
+		ciphertext = (uint8_t *)k_malloc(ciphertext_size);
+		if (ciphertext == NULL) {
+			LOG_ERR("send_tunnel_enc_data: Failed to allocate ciphertext buffer of %d bytes",
+				ciphertext_size);
+			err = -ENOMEM;
+		}
+	}
+
+	/* Allocate memory to hold the message */
+	if (err == 0) {
+		smp_notif = (struct smp_notification *)k_malloc(buffer_len);
+		if (smp_notif == NULL) {
+			LOG_ERR("send_tunnel_enc_data: Failed to allocate message buffer of %d bytes",
+				buffer_len);
+			err = -ENOMEM;
+		}
+	}
+
+	/* Generate the nonce */
+	if (err == 0) {
+		err = psa_generate_random(ciphertext, nonce_len);
+		if (err != PSA_SUCCESS) {
+			LOG_ERR("send_tunnel_enc_data: generate random nonce failed: %d", err);
+		}
+	}
+
+	/* Encrypt the data */
+	if (err == 0) {
+		err = psa_aead_encrypt(enc_key, LCZ_PKI_AUTH_SMP_SESSION_ENC_KEY_ALG, ciphertext,
+				       nonce_len, (uint8_t *)&transport_tunnel_id,
+				       sizeof(transport_tunnel_id), data, datalen,
+				       ciphertext + nonce_len, ciphertext_size - nonce_len,
+				       &ciphertext_out_size);
+		if (err != PSA_SUCCESS) {
+			LOG_ERR("send_tunnel_enc_data: failed to encrypt: %d", err);
+		}
+	}
+
+	/* Build the CBOR message */
+	if (err == 0) {
+		zcbor_new_state(zs, sizeof(zs) / sizeof(zs[0]), smp_notif->buffer,
+				LCZ_COAP_TUNNEL_CBOR_OVERHEAD + ciphertext_size, 1);
+		ok = zcbor_map_start_encode(zs, 1);
+		if (ok) {
+			zstr.len = strlen(LCZ_COAP_CBOR_KEY_TUNNEL_ID);
+			zstr.value = LCZ_COAP_CBOR_KEY_TUNNEL_ID;
+			ok = zcbor_tstr_encode(zs, &zstr);
+		}
+		if (ok) {
+			ok = zcbor_uint32_encode(zs, &transport_tunnel_id);
+		}
+		if (ok) {
+			zstr.len = strlen(LCZ_COAP_CBOR_KEY_DATA);
+			zstr.value = LCZ_COAP_CBOR_KEY_DATA;
+			ok = zcbor_tstr_encode(zs, &zstr);
+		}
+		if (ok) {
+			zstr.len = ciphertext_size;
+			zstr.value = ciphertext;
+			ok = zcbor_bstr_encode(zs, &zstr);
+		}
+		if (ok) {
+			ok = zcbor_map_end_encode(zs, 1);
+		}
+		if (!ok) {
+			/* Most likely failed because message doesn't fit into buffer */
+			LOG_ERR("send_tunnel_enc_data: Failed to encode message of %d bytes",
+				ciphertext_out_size);
+			err = -EMSGSIZE;
+		}
+	}
+
+	/* Send the message */
+	if (err == 0) {
+		payload_len = (size_t)(zs[0].payload - smp_notif->buffer);
+		total_len = sizeof(smp_notif->header) + payload_len;
+		smp_notif->header.op = LCZ_COAP_MGMT_OP_NOTIFY;
+		smp_notif->header.flags = 0;
+		smp_notif->header.len_h8 = (uint8_t)((payload_len >> 8) & 0xFF);
+		smp_notif->header.len_l8 = (uint8_t)((payload_len >> 0) & 0xFF);
+		smp_notif->header.group_h8 = (CONFIG_LCZ_LWM2M_TRANSPORT_BLE_SMP_GROUP >> 8) & 0xFF;
+		smp_notif->header.group_l8 = (CONFIG_LCZ_LWM2M_TRANSPORT_BLE_SMP_GROUP >> 0) & 0xFF;
+		smp_notif->header.seq = 0;
+		smp_notif->header.id = LCZ_COAP_MGMT_ID_TUNNEL_ENC_DATA;
+
+		/* Send chunks of the message to fit into the MTU */
+		data_ptr = (char *)smp_notif;
+		mtu = bt_gatt_get_mtu(active_ble_conn);
+		while (total_len > 0) {
+			size_t this_len = total_len;
+			if (this_len > BT_MAX_PAYLOAD(mtu)) {
+				this_len = BT_MAX_PAYLOAD(mtu);
+			}
+			err = smp_bt_notify(active_ble_conn, data_ptr, this_len);
+			if (err < 0) {
+				LOG_ERR("send_tunnel_enc_data: notify failed: %d", err);
+				break;
+			}
+			total_len -= this_len;
+			data_ptr += this_len;
+		}
+	}
+
+	/* Free memory that we allocated */
+	if (ciphertext != NULL) {
+		k_free(ciphertext);
+	}
+	if (smp_notif != NULL) {
+		k_free(smp_notif);
+	}
+
+	return err;
+}
+#endif
 
 static int add_to_queue(struct k_fifo *queue, const uint8_t *data, size_t len)
 {

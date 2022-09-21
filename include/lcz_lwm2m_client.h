@@ -82,12 +82,11 @@ struct lcz_lwm2m_client_event_callback_agent {
 #define LCZ_COAP_MGMT_ID_OPEN_TUNNEL 1
 #define LCZ_COAP_MGMT_ID_TUNNEL_DATA 2
 #define LCZ_COAP_MGMT_ID_CLOSE_TUNNEL 3
+#define LCZ_COAP_MGMT_ID_TUNNEL_ENC_DATA 4
 #define LCZ_COAP_CBOR_KEY_TUNNEL_ID "i"
 #define LCZ_COAP_CBOR_KEY_DATA "d"
 
-/* Maximum size of the payload in a notifcation that we send */
-#define LCZ_COAP_MGMT_MAX_COAP_PACKET_SIZE                                                         \
-	(CONFIG_BT_L2CAP_TX_MTU - 3 - sizeof(struct bt_dfu_smp_header))
+#define LCZ_COAP_TUNNEL_CBOR_OVERHEAD 16
 
 #if defined(CONFIG_LCZ_LWM2M_TRANSPORT_BLE_PERIPHERAL)
 typedef void (*lcz_lwm2m_client_data_ready_cb_t)(bool data_ready);

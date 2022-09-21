@@ -75,6 +75,14 @@ config LCZ_LWM2M_TRANSPORT_BLE_SMP_GROUP
 	int "SMP group ID for BLE LwM2M transport"
 	default 5683
 
+config LCZ_LWM2M_TRANSPORT_BLE_MAX_PACKET
+	int "Maximum CoAP packet length over BLE"
+	default 1024
+	help
+	  This is the largest CoAP packet that will be allowed to be sent over the
+	  BLE CoAP tunnel. If this value is larger than the BLE MTU, the packet
+	  will be split over multiple writes/notifications.
+
 if LCZ_LWM2M_CLIENT_INIT_KCONFIG
 
 if LCZ_LWM2M_TRANSPORT_UDP

@@ -292,7 +292,7 @@ int lcz_lwm2m_client_set_server_url(uint16_t server_inst, char *url, uint8_t len
 		}
 	}
 #endif
-	LOG_INF("Server URL: %s", log_strdup(server_url));
+	LOG_INF("Server URL: %s", server_url);
 
 exit:
 	return ret;

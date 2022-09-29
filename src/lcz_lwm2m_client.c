@@ -122,12 +122,8 @@ static int device_reboot_cb(uint16_t obj_inst_id, uint8_t *args, uint16_t args_l
 	ARG_UNUSED(obj_inst_id);
 	ARG_UNUSED(args);
 	ARG_UNUSED(args_len);
-	int i;
 
 	LOG_WRN("Rebooting in %d seconds", CONFIG_LCZ_LWM2M_CLIENT_REBOOT_DELAY_SECONDS);
-	for (i = 0; i < CONFIG_LCZ_LWM2M_RD_CLIENT_NUM; i++) {
-		lcz_lwm2m_client_disconnect(i, lwc[i].connected);
-	}
 	k_work_reschedule(&reboot_work, K_SECONDS(CONFIG_LCZ_LWM2M_CLIENT_REBOOT_DELAY_SECONDS));
 
 	return 0;

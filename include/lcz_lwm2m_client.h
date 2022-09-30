@@ -185,6 +185,23 @@ int lcz_lwm2m_client_unregister_event_callback(struct lcz_lwm2m_client_event_cal
 int lcz_lwm2m_client_register_get_time_callback(lwm2m_engine_get_data_cb_t cb);
 
 /**
+ * @brief Register a callback that will be invoked before resource /3/0/13 is written.
+ * This allows a user to set the data pointer to be used for the resource.
+ *
+ * @param cb callback function
+ * @return int 0 on success, < 0 on error
+ */
+int lcz_lwm2m_client_register_pre_write_set_time_callback(lwm2m_engine_get_data_cb_t cb);
+
+/**
+ * @brief Register a callback that will be invoked after resource /3/0/13 is written
+ *
+ * @param cb callback function
+ * @return int 0 on success, < 0 on error
+ */
+int lcz_lwm2m_client_register_post_write_set_time_callback(lwm2m_engine_set_data_cb_t cb);
+
+/**
  * @brief Register a callback that will be invoked when resource /3/0/5 is executed
  *
  * @param cb callback function

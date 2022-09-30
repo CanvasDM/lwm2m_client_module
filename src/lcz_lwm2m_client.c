@@ -750,6 +750,22 @@ int lcz_lwm2m_client_register_get_time_callback(lwm2m_engine_get_data_cb_t cb)
 	return lwm2m_engine_register_read_callback("3/0/13", cb);
 }
 
+int lcz_lwm2m_client_register_pre_write_set_time_callback(lwm2m_engine_get_data_cb_t cb)
+{
+	if (cb == NULL) {
+		return -EINVAL;
+	}
+	return lwm2m_engine_register_pre_write_callback("3/0/13", cb);
+}
+
+int lcz_lwm2m_client_register_post_write_set_time_callback(lwm2m_engine_set_data_cb_t cb)
+{
+	if (cb == NULL) {
+		return -EINVAL;
+	}
+	return lwm2m_engine_register_post_write_callback("3/0/13", cb);
+}
+
 int lcz_lwm2m_client_register_factory_default_callback(lwm2m_engine_execute_cb_t cb)
 {
 	if (cb == NULL) {

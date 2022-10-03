@@ -89,7 +89,7 @@ static int smp_coap_tunnel_data(struct mgmt_ctxt *ctxt);
 static int smp_coap_close_tunnel(struct mgmt_ctxt *ctxt);
 #if defined(CONFIG_LCZ_PKI_AUTH_SMP_PERIPHERAL)
 static int smp_coap_tunnel_enc_data(struct mgmt_ctxt *ctxt);
-static int send_tunnel_enc_data(struct lwm2m_ctx *client_ctx, psa_key_id_t enc_key,
+static int send_tunnel_enc_data(struct lwm2m_ctx *client_ctx, psa_key_id_t aead_key,
 				const uint8_t *data, uint32_t datalen);
 #endif
 static int send_tunnel_data(struct lwm2m_ctx *client_ctx, const uint8_t *data, uint32_t datalen);
@@ -207,7 +207,7 @@ static int lwm2m_transport_ble_peripheral_send(struct lwm2m_ctx *client_ctx, con
 					       uint32_t datalen)
 {
 #if defined(CONFIG_LCZ_PKI_AUTH_SMP_PERIPHERAL)
-	psa_key_id_t enc_key = PSA_KEY_HANDLE_INIT;
+	psa_key_id_t aead_key = PSA_KEY_HANDLE_INIT;
 #endif
 	int err = -ENOTCONN;
 
@@ -216,9 +216,9 @@ static int lwm2m_transport_ble_peripheral_send(struct lwm2m_ctx *client_ctx, con
 
 	if (server_tunnel_open && active_ble_conn) {
 #if defined(CONFIG_LCZ_PKI_AUTH_SMP_PERIPHERAL)
-		if (lcz_pki_auth_smp_periph_get_keys(&enc_key, NULL) == 0) {
+		if (lcz_pki_auth_smp_periph_get_keys(&aead_key, NULL, NULL) == 0) {
 			/* If we can get a key, send an encrypted message */
-			err = send_tunnel_enc_data(client_ctx, enc_key, data, datalen);
+			err = send_tunnel_enc_data(client_ctx, aead_key, data, datalen);
 		} else
 #endif
 		{
@@ -544,7 +544,7 @@ static int smp_coap_tunnel_enc_data(struct mgmt_ctxt *ctxt)
 	int rc = 0;
 	bool ok;
 	size_t decoded;
-	psa_key_id_t enc_key = PSA_KEY_HANDLE_INIT;
+	psa_key_id_t aead_key = PSA_KEY_HANDLE_INIT;
 	size_t nonce_len;
 	size_t plaintext_size;
 	size_t plaintext_out;
@@ -556,7 +556,7 @@ static int smp_coap_tunnel_enc_data(struct mgmt_ctxt *ctxt)
 	};
 
 	/* If we are not authorized, we shouldn't be getting the encrypted message */
-	if (lcz_pki_auth_smp_periph_get_keys(&enc_key, NULL) != 0) {
+	if (lcz_pki_auth_smp_periph_get_keys(&aead_key, NULL, NULL) != 0) {
 		LOG_ERR("smp_coap_tunnel_enc_data: Connection is not authorized, expected unencrypted tunnel data");
 		rc = -EPERM;
 	}
@@ -588,10 +588,10 @@ static int smp_coap_tunnel_enc_data(struct mgmt_ctxt *ctxt)
 
 			/* Calculate sizes */
 			nonce_len = PSA_AEAD_NONCE_LENGTH(LCZ_PKI_AUTH_SMP_SESSION_KEY_TYPE,
-							  LCZ_PKI_AUTH_SMP_SESSION_ENC_KEY_ALG);
+							  LCZ_PKI_AUTH_SMP_SESSION_AEAD_KEY_ALG);
 			plaintext_size =
 				PSA_AEAD_DECRYPT_OUTPUT_SIZE(LCZ_PKI_AUTH_SMP_SESSION_KEY_TYPE,
-							     LCZ_PKI_AUTH_SMP_SESSION_ENC_KEY_ALG,
+							     LCZ_PKI_AUTH_SMP_SESSION_AEAD_KEY_ALG,
 							     data.len - nonce_len);
 
 			/* Allocate memory to hold the plaintext */
@@ -603,7 +603,7 @@ static int smp_coap_tunnel_enc_data(struct mgmt_ctxt *ctxt)
 
 			/* Decrypt the data */
 			if (rc == 0) {
-				rc = psa_aead_decrypt(enc_key, LCZ_PKI_AUTH_SMP_SESSION_ENC_KEY_ALG,
+				rc = psa_aead_decrypt(aead_key, LCZ_PKI_AUTH_SMP_SESSION_AEAD_KEY_ALG,
 						      data.value, nonce_len,
 						      (uint8_t *)&transport_tunnel_id,
 						      sizeof(transport_tunnel_id),
@@ -744,7 +744,7 @@ static int send_tunnel_data(struct lwm2m_ctx *client_ctx, const uint8_t *data, u
 }
 
 #if defined(CONFIG_LCZ_PKI_AUTH_SMP_PERIPHERAL)
-static int send_tunnel_enc_data(struct lwm2m_ctx *client_ctx, psa_key_id_t enc_key,
+static int send_tunnel_enc_data(struct lwm2m_ctx *client_ctx, psa_key_id_t aead_key,
 				const uint8_t *data, uint32_t datalen)
 {
 	zcbor_state_t zs[CONFIG_MGMT_MAX_DECODING_LEVELS + 2];
@@ -764,10 +764,10 @@ static int send_tunnel_enc_data(struct lwm2m_ctx *client_ctx, psa_key_id_t enc_k
 
 	/* Compute the ciphertext size */
 	nonce_len = PSA_AEAD_NONCE_LENGTH(LCZ_PKI_AUTH_SMP_SESSION_KEY_TYPE,
-					  LCZ_PKI_AUTH_SMP_SESSION_ENC_KEY_ALG);
+					  LCZ_PKI_AUTH_SMP_SESSION_AEAD_KEY_ALG);
 	ciphertext_size =
 		nonce_len + PSA_AEAD_ENCRYPT_OUTPUT_SIZE(LCZ_PKI_AUTH_SMP_SESSION_KEY_TYPE,
-							 LCZ_PKI_AUTH_SMP_SESSION_ENC_KEY_ALG,
+							 LCZ_PKI_AUTH_SMP_SESSION_AEAD_KEY_ALG,
 							 datalen);
 
 	/* Compute the message size */
@@ -808,7 +808,7 @@ static int send_tunnel_enc_data(struct lwm2m_ctx *client_ctx, psa_key_id_t enc_k
 
 	/* Encrypt the data */
 	if (err == 0) {
-		err = psa_aead_encrypt(enc_key, LCZ_PKI_AUTH_SMP_SESSION_ENC_KEY_ALG, ciphertext,
+		err = psa_aead_encrypt(aead_key, LCZ_PKI_AUTH_SMP_SESSION_AEAD_KEY_ALG, ciphertext,
 				       nonce_len, (uint8_t *)&transport_tunnel_id,
 				       sizeof(transport_tunnel_id), data, datalen,
 				       ciphertext + nonce_len, ciphertext_size - nonce_len,

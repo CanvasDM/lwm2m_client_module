@@ -444,7 +444,7 @@ static int smp_coap_tunnel_data(struct mgmt_ctxt *ctxt)
 
 #if defined(CONFIG_LCZ_PKI_AUTH_SMP_PERIPHERAL)
 	/* If we are authorized, we shouldn't be getting the unencrypted message */
-	if (lcz_pki_auth_smp_periph_get_keys(NULL, NULL) == 0) {
+	if (lcz_pki_auth_smp_periph_get_keys(NULL, NULL, NULL) == 0) {
 		LOG_ERR("smp_coap_tunnel_data: Connection is authorized, expected encrypted tunnel data");
 		rc = -EPERM;
 	}

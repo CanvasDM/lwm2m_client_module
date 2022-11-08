@@ -5,7 +5,7 @@
 #
 menuconfig LCZ_LWM2M_CLIENT
 	bool "LCZ LwM2M Client"
-	depends on LCZ_LWM2M
+	depends on LWM2M
 
 if LCZ_LWM2M_CLIENT
 
@@ -28,7 +28,7 @@ config LCZ_LWM2M_CLIENT_ENDPOINT_NAME
 
 config LCZ_LWM2M_TLS_TAG
 	int "TLS tag for secure connection"
-	depends on LCZ_LWM2M_DTLS_SUPPORT
+	depends on LWM2M_DTLS_SUPPORT
 	default 999
 	range 0 65535
 
@@ -85,7 +85,7 @@ config LCZ_LWM2M_TRANSPORT_BLE_MAX_PACKET
 
 if LCZ_LWM2M_CLIENT_INIT_KCONFIG
 
-if LCZ_LWM2M_TRANSPORT_UDP
+if LWM2M_TRANSPORT_UDP
 
 config LCZ_LWM2M_SERVER_URL
 	string "Server URL"
@@ -116,7 +116,7 @@ config LCZ_LWM2M_PSK
 	  used as the PSK.
 	  Length of this string needs to be LCZ_LWM2M_SECURITY_KEY_SIZE.
 
-endif # LCZ_LWM2M_TRANSPORT_UDP
+endif # LWM2M_TRANSPORT_UDP
 
 config LCZ_LWM2M_BOOTSTRAP_SETTING
 	int "Bootstrap setting"

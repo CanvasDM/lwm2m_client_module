@@ -9,18 +9,20 @@
 /**************************************************************************************************/
 /* Includes                                                                                       */
 /**************************************************************************************************/
-#include <logging/log.h>
+#include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(lcz_lwm2m_client, CONFIG_LCZ_LWM2M_CLIENT_LOG_LEVEL);
 
-#include <zephyr.h>
-#include <init.h>
-#include <sys/reboot.h>
-#include <sys/util.h>
+#include <zephyr/zephyr.h>
+#include <zephyr/init.h>
+#include <zephyr/sys/reboot.h>
+#include <zephyr/sys/util.h>
 #include <lwm2m_engine.h>
-#include "lcz_lwm2m_client.h"
+
 #if defined(CONFIG_LCZ_LWM2M_CLIENT_ENABLE_ATTRIBUTES)
-#include "attr.h"
+#include <attr.h>
 #endif
+
+#include "lcz_lwm2m_client.h"
 
 /**************************************************************************************************/
 /* Local Constant, Macro and Type Definitions                                                     */
@@ -51,7 +53,7 @@ static int create_res_if_needed(uint16_t obj_id, uint16_t obj_inst, uint16_t res
 /**************************************************************************************************/
 /* Local Data Definitions                                                                         */
 /**************************************************************************************************/
-static struct lcz_lwm2m_client lwc[CONFIG_LCZ_LWM2M_RD_CLIENT_NUM];
+static struct lcz_lwm2m_client lwc[CONFIG_LWM2M_RD_CLIENT_NUM];
 
 static K_WORK_DELAYABLE_DEFINE(reboot_work, reboot_work_cb);
 
@@ -74,7 +76,7 @@ static struct lcz_lwm2m_client *get_lwc_from_ctx(struct lwm2m_ctx *ctx)
 static int get_lwm2m_client_index_from_ctx(struct lwm2m_ctx *ctx)
 {
 	int i;
-	for (i = 0; i < CONFIG_LCZ_LWM2M_RD_CLIENT_NUM; i++) {
+	for (i = 0; i < CONFIG_LWM2M_RD_CLIENT_NUM; i++) {
 		if (&lwc[i].client == ctx) {
 			return i;
 		}
@@ -195,6 +197,10 @@ static void rd_client_event(struct lwm2m_ctx *client, enum lwm2m_rd_client_event
 		LOG_DBG("Network Error");
 		set_connected(client, false, client_event);
 		break;
+
+	case LWM2M_RD_CLIENT_EVENT_ENGINE_SUSPENDED:
+		/* Do nothing */
+		break;
 	}
 	on_lwm2m_event(client, client_event);
 }
@@ -250,9 +256,6 @@ int lcz_lwm2m_client_set_server_url(uint16_t server_inst, char *url, uint8_t len
 {
 	int ret;
 	char obj_path[LWM2M_MAX_PATH_STR_LEN];
-	char *server_url;
-	uint16_t server_url_len;
-	uint8_t server_url_flags;
 
 	ret = create_obj_if_needed(LWM2M_OBJECT_SECURITY_ID, server_inst);
 	if (ret < 0) {
@@ -260,35 +263,22 @@ int lcz_lwm2m_client_set_server_url(uint16_t server_inst, char *url, uint8_t len
 	}
 
 	snprintk(obj_path, sizeof(obj_path), "0/%d/0", server_inst);
-	ret = lwm2m_engine_get_res_data(obj_path, (void **)&server_url, &server_url_len,
-					&server_url_flags);
+	ret = lwm2m_engine_set_string(obj_path, url);
 	if (ret < 0) {
-		goto exit;
-	}
-
-	if (length > server_url_len) {
-		ret = -EINVAL;
-		LOG_ERR("URL len [%d] is longer than [%d]", length, server_url_len);
-		goto exit;
-	}
-
-	server_url_len = snprintk(server_url, server_url_len, "%s", url);
-	if (server_url_len < length) {
-		LOG_ERR("Server URL truncated [%s]", server_url);
-		ret = -EINVAL;
+		LOG_ERR("set string failed for path %s to url %s", obj_path, url);
 		goto exit;
 	}
 
 #if defined(CONFIG_LCZ_LWM2M_CLIENT_ENABLE_ATTRIBUTES)
 	if (server_inst == LCZ_LWM2M_CLIENT_SERVER_INST_DEFAULT) {
-		ret = attr_set_string(ATTR_ID_lwm2m_server_url, (char const *)server_url,
-				      server_url_len);
+		ret = attr_set_string(ATTR_ID_lwm2m_server_url, (char const *)url, strlen(url));
 		if (ret < 0) {
 			goto exit;
 		}
 	}
 #endif
-	LOG_INF("Server URL: %s", server_url);
+
+	LOG_INF("Server URL: %s", url);
 
 exit:
 	return ret;
@@ -391,7 +381,7 @@ int lcz_lwm2m_client_set_bootstrap(uint16_t lwm2m_client_index, uint16_t server_
 		goto exit;
 	}
 
-	if (enable && !IS_ENABLED(CONFIG_LCZ_LWM2M_RD_CLIENT_SUPPORT_BOOTSTRAP)) {
+	if (enable && !IS_ENABLED(CONFIG_LWM2M_RD_CLIENT_SUPPORT_BOOTSTRAP)) {
 		LOG_ERR("Bootstrap support not enabled");
 		ret = -ENOTSUP;
 		goto exit;
@@ -499,20 +489,21 @@ int lcz_lwm2m_client_connect(int lwm2m_client_index, int init_sec_obj_inst, int 
 	uint32_t flags;
 	struct lcz_lwm2m_client *lwc_inst = &lwc[lwm2m_client_index];
 
-	if (lwm2m_client_index >= CONFIG_LCZ_LWM2M_RD_CLIENT_NUM) {
+	if (lwm2m_client_index >= CONFIG_LWM2M_RD_CLIENT_NUM) {
 		ret = -EINVAL;
 	} else {
 		if (!lwc_inst->connection_started) {
 			flags = lwc_inst->bootstrap_enabled ? LWM2M_RD_CLIENT_FLAG_BOOTSTRAP : 0;
 
 			(void)memset(&lwc_inst->client, 0, sizeof(lwc_inst->client));
-#if defined(CONFIG_LCZ_LWM2M_DTLS_SUPPORT)
+			lwc_inst->client.sock_fd = -1;
+#if defined(CONFIG_LWM2M_DTLS_SUPPORT)
 			if (security_tag >= 0) {
 				lwc_inst->client.tls_tag = security_tag;
 			}
 #endif
 
-#if defined(CONFIG_LCZ_LWM2M_TRANSPORT_UDP)
+#if defined(CONFIG_LWM2M_TRANSPORT_UDP)
 			if (transport == LCZ_LWM2M_CLIENT_TRANSPORT_UDP) {
 				lwc_inst->client.transport_name = "udp";
 			}
@@ -548,7 +539,7 @@ int lcz_lwm2m_client_disconnect(int lwm2m_client_index, bool deregister)
 {
 	struct lcz_lwm2m_client *lwc_inst;
 
-	if (lwm2m_client_index < CONFIG_LCZ_LWM2M_RD_CLIENT_NUM) {
+	if (lwm2m_client_index < CONFIG_LWM2M_RD_CLIENT_NUM) {
 		lwc_inst = &lwc[lwm2m_client_index];
 		lwm2m_rd_client_stop(&lwc_inst->client, rd_client_event, deregister);
 
@@ -563,7 +554,7 @@ int lcz_lwm2m_client_disconnect(int lwm2m_client_index, bool deregister)
 
 bool lcz_lwm2m_client_is_connected(int lwm2m_client_index)
 {
-	if (lwm2m_client_index >= CONFIG_LCZ_LWM2M_RD_CLIENT_NUM) {
+	if (lwm2m_client_index >= CONFIG_LWM2M_RD_CLIENT_NUM) {
 		return false;
 	}
 	return lwc[lwm2m_client_index].connected;
@@ -579,7 +570,9 @@ int lcz_lwm2m_client_set_device_manufacturer(char *value)
 		goto exit;
 	}
 #endif
-	ret = lwm2m_engine_set_res_data("3/0/0", value, strlen(value) + 1, LWM2M_RES_DATA_FLAG_RO);
+	ret = lwm2m_engine_set_res_buf(LWM2M_PATH(LWM2M_OBJECT_DEVICE_ID, 0, 0), value,
+				       strlen(value) + 1, strlen(value) + 1,
+				       LWM2M_RES_DATA_FLAG_RO);
 exit:
 	return ret;
 }
@@ -594,7 +587,9 @@ int lcz_lwm2m_client_set_device_model_number(char *value)
 		goto exit;
 	}
 #endif
-	ret = lwm2m_engine_set_res_data("3/0/1", value, strlen(value) + 1, LWM2M_RES_DATA_FLAG_RO);
+	ret = lwm2m_engine_set_res_buf(LWM2M_PATH(LWM2M_OBJECT_DEVICE_ID, 0, 1), value,
+				       strlen(value) + 1, strlen(value) + 1,
+				       LWM2M_RES_DATA_FLAG_RO);
 exit:
 	return ret;
 }
@@ -609,7 +604,9 @@ int lcz_lwm2m_client_set_device_serial_number(char *value)
 		goto exit;
 	}
 #endif
-	ret = lwm2m_engine_set_res_data("3/0/2", value, strlen(value) + 1, LWM2M_RES_DATA_FLAG_RO);
+	ret = lwm2m_engine_set_res_buf(LWM2M_PATH(LWM2M_OBJECT_DEVICE_ID, 0, 2), value,
+				       strlen(value) + 1, strlen(value) + 1,
+				       LWM2M_RES_DATA_FLAG_RO);
 exit:
 	return ret;
 }
@@ -624,7 +621,9 @@ int lcz_lwm2m_client_set_device_firmware_version(char *value)
 		goto exit;
 	}
 #endif
-	ret = lwm2m_engine_set_res_data("3/0/3", value, strlen(value) + 1, LWM2M_RES_DATA_FLAG_RO);
+	ret = lwm2m_engine_set_res_buf(LWM2M_PATH(LWM2M_OBJECT_DEVICE_ID, 0, 3), value,
+				       strlen(value) + 1, strlen(value) + 1,
+				       LWM2M_RES_DATA_FLAG_RO);
 exit:
 	return ret;
 }
@@ -649,7 +648,8 @@ int lcz_lwm2m_client_set_available_power_source(uint16_t res_inst,
 #endif
 
 	snprintk(obj_path, sizeof(obj_path), "3/0/6/%d", res_inst);
-	ret = lwm2m_engine_set_res_data(obj_path, src, sizeof(uint8_t), LWM2M_RES_DATA_FLAG_RO);
+	ret = lwm2m_engine_set_res_buf(obj_path, src, sizeof(uint8_t), sizeof(uint8_t),
+				       LWM2M_RES_DATA_FLAG_RO);
 
 exit:
 	return ret;
@@ -675,8 +675,8 @@ int lcz_lwm2m_client_set_power_source_voltage(uint16_t res_inst, int32_t *milliv
 #endif
 
 	snprintk(obj_path, sizeof(obj_path), "3/0/7/%d", res_inst);
-	ret = lwm2m_engine_set_res_data(obj_path, millivolts, sizeof(int32_t),
-					LWM2M_RES_DATA_FLAG_RO);
+	ret = lwm2m_engine_set_res_buf(obj_path, millivolts, sizeof(int32_t), sizeof(int32_t),
+				       LWM2M_RES_DATA_FLAG_RO);
 exit:
 	return ret;
 }
@@ -696,7 +696,9 @@ int lcz_lwm2m_client_set_software_version(char *value)
 		goto exit;
 	}
 #endif
-	ret = lwm2m_engine_set_res_data("3/0/19", value, strlen(value) + 1, LWM2M_RES_DATA_FLAG_RO);
+	ret = lwm2m_engine_set_res_buf(LWM2M_PATH(LWM2M_OBJECT_DEVICE_ID, 0, 19), value,
+				       strlen(value) + 1, strlen(value) + 1,
+				       LWM2M_RES_DATA_FLAG_RO);
 exit:
 	return ret;
 }
@@ -711,7 +713,9 @@ int lcz_lwm2m_client_set_hardware_version(char *value)
 		goto exit;
 	}
 #endif
-	ret = lwm2m_engine_set_res_data("3/0/18", value, strlen(value) + 1, LWM2M_RES_DATA_FLAG_RO);
+	ret = lwm2m_engine_set_res_buf(LWM2M_PATH(LWM2M_OBJECT_DEVICE_ID, 0, 18), value,
+				       strlen(value) + 1, strlen(value) + 1,
+				       LWM2M_RES_DATA_FLAG_RO);
 exit:
 	return ret;
 }
@@ -727,14 +731,16 @@ int lcz_lwm2m_client_set_battery_status(lcz_lwm2m_client_device_battery_status_t
 
 #endif
 
-	ret = lwm2m_engine_set_res_data("3/0/20", status, sizeof(uint8_t), LWM2M_RES_DATA_FLAG_RO);
+	ret = lwm2m_engine_set_res_buf(LWM2M_PATH(LWM2M_OBJECT_DEVICE_ID, 0, 20), status,
+				       sizeof(uint8_t), sizeof(uint8_t),
+				       LWM2M_RES_DATA_FLAG_RO);
 exit:
 	return ret;
 }
 
 struct lwm2m_ctx *lcz_lwm2m_client_get_ctx(uint16_t index)
 {
-	if (index >= CONFIG_LCZ_LWM2M_RD_CLIENT_NUM) {
+	if (index >= CONFIG_LWM2M_RD_CLIENT_NUM) {
 		LOG_WRN("Request for invalid LwM2M client index %d, returning first context",
 			index);
 		return &lwc[0].client;
@@ -781,7 +787,7 @@ SYS_INIT(lcz_lwm2m_client_init, APPLICATION, CONFIG_LCZ_LWM2M_CLIENT_INIT_PRIORI
 static int lcz_lwm2m_client_init(const struct device *device)
 {
 	int ret;
-#if defined(CONFIG_LCZ_LWM2M_TRANSPORT_UDP)
+#if defined(CONFIG_LWM2M_TRANSPORT_UDP)
 	char *server_url;
 	lcz_lwm2m_client_security_mode_t sec_mode;
 	char *psk_id;
@@ -818,7 +824,7 @@ static int lcz_lwm2m_client_init(const struct device *device)
 
 	lcz_lwm2m_client_register_reboot_callback(device_reboot_cb);
 
-#if defined(CONFIG_LCZ_LWM2M_TRANSPORT_UDP)
+#if defined(CONFIG_LWM2M_TRANSPORT_UDP)
 #if defined(CONFIG_LCZ_LWM2M_CLIENT_INIT_KCONFIG)
 	server_url = CONFIG_LCZ_LWM2M_SERVER_URL;
 	sec_mode = (lcz_lwm2m_client_security_mode_t)CONFIG_LCZ_LWM2M_SECURITY_MODE;
@@ -855,12 +861,12 @@ static int lcz_lwm2m_client_init(const struct device *device)
 			goto exit;
 		}
 
-		ret = lcz_lwm2m_client_set_secret_key(0, psk, CONFIG_LCZ_LWM2M_SECURITY_KEY_SIZE);
+		ret = lcz_lwm2m_client_set_secret_key(0, psk, CONFIG_LWM2M_SECURITY_KEY_SIZE);
 		if (ret < 0) {
 			goto exit;
 		}
 	}
-#endif /* CONFIG_LCZ_LWM2M_TRANSPORT_UDP */
+#endif /* CONFIG_LWM2M_TRANSPORT_UDP */
 
 #if defined(CONFIG_LCZ_LWM2M_CLIENT_INIT_KCONFIG)
 	bootstrap = (bool)CONFIG_LCZ_LWM2M_BOOTSTRAP_SETTING;

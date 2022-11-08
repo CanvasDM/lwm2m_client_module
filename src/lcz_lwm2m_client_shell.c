@@ -6,14 +6,15 @@
  * SPDX-License-Identifier: LicenseRef-LairdConnectivity-Clause
  */
 
-#include <logging/log.h>
+#include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(lwm2m_shell, CONFIG_LCZ_LWM2M_CLIENT_LOG_LEVEL);
 
 /**************************************************************************************************/
 /* Includes                                                                                       */
 /**************************************************************************************************/
 #include <stdlib.h>
-#include <shell/shell.h>
+#include <zephyr/shell/shell.h>
+
 #include "lcz_lwm2m_client.h"
 
 /**************************************************************************************************/

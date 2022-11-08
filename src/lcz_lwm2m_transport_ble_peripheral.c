@@ -9,11 +9,10 @@
 /**************************************************************************************************/
 /* Includes                                                                                       */
 /**************************************************************************************************/
-#include <logging/log.h>
+#include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(lcz_lwm2m_ble_peripheral, CONFIG_LCZ_LWM2M_CLIENT_LOG_LEVEL);
 
 #include <fcntl.h>
-#include <zephyr/types.h>
 #include <stddef.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -21,26 +20,30 @@ LOG_MODULE_REGISTER(lcz_lwm2m_ble_peripheral, CONFIG_LCZ_LWM2M_CLIENT_LOG_LEVEL)
 #include <string.h>
 #include <ctype.h>
 #include <errno.h>
-#include <init.h>
-#include <sys/printk.h>
-#include <posix/sys/eventfd.h>
-#include <bluetooth/conn.h>
-#include <bluetooth/gatt.h>
+#include <zephyr/types.h>
+#include <zephyr/init.h>
+#include <zephyr/sys/printk.h>
+#include <zephyr/posix/sys/eventfd.h>
+#include <zephyr/bluetooth/conn.h>
+#include <zephyr/bluetooth/gatt.h>
 #include <bluetooth/gatt_dm.h>
 #include <bluetooth/services/dfu_smp.h>
-#include <bluetooth/bluetooth.h>
+#include <zephyr/bluetooth/bluetooth.h>
 #include <mgmt/mgmt.h>
-#include <mgmt/mcumgr/smp_bt.h>
+#include <zephyr/mgmt/mcumgr/smp_bt.h>
+#include <zephyr/net/lwm2m.h>
 #include <zcbor_common.h>
 #include <zcbor_encode.h>
 #include <zcbor_decode.h>
 #include <zcbor_bulk/zcbor_bulk_priv.h>
 
-#include <lcz_lwm2m.h>
-#include "lcz_bluetooth.h"
+#include <lwm2m_engine.h>
+#include <lwm2m_transport.h>
+#include <lcz_bluetooth.h>
 #if defined(CONFIG_LCZ_PKI_AUTH_SMP_PERIPHERAL)
-#include "lcz_pki_auth_smp.h"
+#include <lcz_pki_auth_smp.h>
 #endif
+
 #include "lcz_lwm2m_client.h"
 
 /**************************************************************************************************/
@@ -74,7 +77,12 @@ static int lcz_lwm2m_transport_ble_peripheral_init(const struct device *dev);
 
 static void eventfd_close(int fd);
 
+static int lwm2m_transport_ble_peripheral_setup(struct lwm2m_ctx *client_ctx, char *url,
+					     bool is_firmware_uri);
+static int lwm2m_transport_ble_peripheral_open(struct lwm2m_ctx *client_ctx);
 static int lwm2m_transport_ble_peripheral_start(struct lwm2m_ctx *client_ctx);
+static int lwm2m_transport_ble_peripheral_suspend(struct lwm2m_ctx *client_ctx, bool should_close);
+static int lwm2m_transport_ble_peripheral_resume(struct lwm2m_ctx *client_ctx);
 static int lwm2m_transport_ble_peripheral_send(struct lwm2m_ctx *client_ctx, const uint8_t *data,
 					       uint32_t datalen);
 static int lwm2m_transport_ble_peripheral_recv(struct lwm2m_ctx *client_ctx);
@@ -107,10 +115,14 @@ static void tunnel_id_timeout_handler(struct k_work *work);
 /* Local Data Definitions                                                                         */
 /**************************************************************************************************/
 static const struct lwm2m_transport_procedure ble_peripheral_transport = {
+	.setup = lwm2m_transport_ble_peripheral_setup,
+	.open = lwm2m_transport_ble_peripheral_open,
 	.start = lwm2m_transport_ble_peripheral_start,
+	.suspend = lwm2m_transport_ble_peripheral_suspend,
+	.resume = lwm2m_transport_ble_peripheral_resume,
+	.close = lwm2m_transport_ble_peripheral_close,
 	.send = lwm2m_transport_ble_peripheral_send,
 	.recv = lwm2m_transport_ble_peripheral_recv,
-	.close = lwm2m_transport_ble_peripheral_close,
 	.is_connected = lwm2m_transport_ble_peripheral_is_connected,
 	.tx_pending = lwm2m_transport_ble_peripheral_tx_pending,
 	.print_addr = lwm2m_transport_ble_peripheral_print_addr,
@@ -195,11 +207,42 @@ static void eventfd_close(int fd)
 	}
 }
 
+static int lwm2m_transport_ble_peripheral_setup(struct lwm2m_ctx *client_ctx, char *url,
+					     bool is_firmware_uri)
+{
+	/* Nothing to do here. Everything is managed in start() */
+	return 0;
+}
+
+static int lwm2m_transport_ble_peripheral_open(struct lwm2m_ctx *client_ctx)
+{
+	/* Nothing to do here. Everything is managed in start() */
+	return 0;
+}
+
 static int lwm2m_transport_ble_peripheral_start(struct lwm2m_ctx *client_ctx)
 {
 	/* Create the eventfd file descriptor */
 	smp_socket = eventfd(0, EFD_NONBLOCK);
 	client_ctx->sock_fd = smp_socket;
+
+	/* Add the socket to the socket table */
+	if (lwm2m_sock_table_update(client_ctx)) {
+		lwm2m_sock_table_add(client_ctx);
+	}
+
+	return 0;
+}
+
+static int lwm2m_transport_ble_peripheral_suspend(struct lwm2m_ctx *client_ctx, bool should_close)
+{
+	/* Nothing to do here. We don't support suspend/resume in this transport. */
+	return 0;
+}
+
+static int lwm2m_transport_ble_peripheral_resume(struct lwm2m_ctx *client_ctx)
+{
+	/* Nothing to do here. We don't support suspend/resume in this transport. */
 	return 0;
 }
 
@@ -304,6 +347,9 @@ static int lwm2m_transport_ble_peripheral_close(struct lwm2m_ctx *client_ctx)
 	/* Tunnel is closed */
 	server_tunnel_open = false;
 
+	/* Remove the socket from the socket table */
+	lwm2m_sock_table_del(client_ctx);
+
 	/* Close the socket */
 	eventfd_close(smp_socket);
 	client_ctx->sock_fd = -1;
@@ -404,7 +450,7 @@ static int smp_coap_open_tunnel(struct mgmt_ctxt *ctxt)
 		/* Restart the ID timeout work */
 		k_work_reschedule_for_queue(
 			&k_sys_work_q, &tunnel_id_timeout_work,
-			K_SECONDS(CONFIG_LCZ_LWM2M_ENGINE_DEFAULT_LIFETIME + TUNNEL_TIMEOUT_GRACE));
+			K_SECONDS(CONFIG_LWM2M_ENGINE_DEFAULT_LIFETIME + TUNNEL_TIMEOUT_GRACE));
 
 		server_tunnel_open = true;
 
@@ -472,7 +518,7 @@ static int smp_coap_tunnel_data(struct mgmt_ctxt *ctxt)
 			/* Restart the ID timeout work */
 			k_work_reschedule_for_queue(
 				&k_sys_work_q, &tunnel_id_timeout_work,
-				K_SECONDS(CONFIG_LCZ_LWM2M_ENGINE_DEFAULT_LIFETIME +
+				K_SECONDS(CONFIG_LWM2M_ENGINE_DEFAULT_LIFETIME +
 					  TUNNEL_TIMEOUT_GRACE));
 
 			/* Add it to our RX queue */
@@ -583,7 +629,7 @@ static int smp_coap_tunnel_enc_data(struct mgmt_ctxt *ctxt)
 			/* Restart the ID timeout work */
 			k_work_reschedule_for_queue(
 				&k_sys_work_q, &tunnel_id_timeout_work,
-				K_SECONDS(CONFIG_LCZ_LWM2M_ENGINE_DEFAULT_LIFETIME +
+				K_SECONDS(CONFIG_LWM2M_ENGINE_DEFAULT_LIFETIME +
 					  TUNNEL_TIMEOUT_GRACE));
 
 			/* Calculate sizes */

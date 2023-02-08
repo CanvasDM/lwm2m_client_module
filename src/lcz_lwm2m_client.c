@@ -855,16 +855,14 @@ static int lcz_lwm2m_client_init(const struct device *device)
 		goto exit;
 	}
 
-	if (sec_mode == LCZ_LWM2M_CLIENT_SECURITY_MODE_PSK) {
-		ret = lcz_lwm2m_client_set_key_or_id(0, psk_id, strlen(psk_id));
-		if (ret < 0) {
-			goto exit;
-		}
+	ret = lcz_lwm2m_client_set_key_or_id(0, psk_id, strlen(psk_id));
+	if (ret < 0) {
+		goto exit;
+	}
 
-		ret = lcz_lwm2m_client_set_secret_key(0, psk, CONFIG_LWM2M_SECURITY_KEY_SIZE);
-		if (ret < 0) {
-			goto exit;
-		}
+	ret = lcz_lwm2m_client_set_secret_key(0, psk, CONFIG_LWM2M_SECURITY_KEY_SIZE);
+	if (ret < 0) {
+		goto exit;
 	}
 #endif /* CONFIG_LWM2M_TRANSPORT_UDP */
 

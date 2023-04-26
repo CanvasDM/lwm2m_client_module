@@ -217,11 +217,13 @@ int lcz_lwm2m_client_register_factory_default_callback(lwm2m_engine_execute_cb_t
  * @param endpoint_name Name of the endpoint
  * @param transport Transport type
  * @param security_tag TLS security tag
+ * @param load_credentials certificate loading function to support certificate security
+ * This function can also be set to NULL to use PSK security instead.
  * @return int 0 on success, < 0 on error
  */
 int lcz_lwm2m_client_connect(int lwm2m_client_index, int init_sec_obj_inst, int init_srv_obj_inst,
 			     char *endpoint_name, lcz_lwm2m_client_transport_t transport,
-			     int security_tag);
+			     int security_tag, load_credentials_cb_t load_credentials);
 
 /**
  * @brief Disconnect the LwM2M client

@@ -139,6 +139,57 @@ static void set_connected(struct lwm2m_ctx *ctx, bool connected,
 	on_connected_event(ctx, lwc_inst->connected, client_event);
 }
 
+static bool sm_bootstrap_verify(bool bootstrap_server, int sec_obj_inst)
+{
+	char pathstr[MAX_RESOURCE_LEN];
+	bool bootstrap;
+	int ret;
+
+	snprintk(pathstr, sizeof(pathstr), "0/%d/1", sec_obj_inst);
+	ret = lwm2m_engine_get_bool(pathstr, &bootstrap);
+	if (ret < 0) {
+		LOG_WRN("Failed to check bootstrap, err %d", ret);
+		return false;
+	}
+
+	if (bootstrap == bootstrap_server) {
+		return true;
+	} else {
+		return false;
+	}
+}
+
+static int sm_select_security_inst(bool bootstrap_server, int *sec_obj_inst)
+{
+	int i, obj_inst_id = -1;
+
+	/* lookup existing index */
+	i = lwm2m_security_inst_id_to_index(*sec_obj_inst);
+	if (i >= 0 && sm_bootstrap_verify(bootstrap_server, *sec_obj_inst)) {
+		return 0;
+	}
+
+	*sec_obj_inst = -1;
+
+	/* Iterate over all instances to find the correct one. */
+	for (i = 0; i < CONFIG_LWM2M_SECURITY_INSTANCE_COUNT; i++) {
+		obj_inst_id = lwm2m_security_index_to_inst_id(i);
+		if (obj_inst_id < 0) {
+			LOG_WRN("Failed to get inst id for %d", i);
+			continue;
+		}
+
+		if (sm_bootstrap_verify(bootstrap_server, obj_inst_id)) {
+			*sec_obj_inst = obj_inst_id;
+			return 0;
+		}
+	}
+
+	LOG_WRN("sec_obj_inst: No matching servers found.");
+
+	return -ENOENT;
+}
+
 static void rd_client_event(struct lwm2m_ctx *client, enum lwm2m_rd_client_event client_event)
 {
 	switch (client_event) {
@@ -155,9 +206,38 @@ static void rd_client_event(struct lwm2m_ctx *client, enum lwm2m_rd_client_event
 		LOG_DBG("Bootstrap registration complete");
 		break;
 
-	case LWM2M_RD_CLIENT_EVENT_BOOTSTRAP_TRANSFER_COMPLETE:
+	case LWM2M_RD_CLIENT_EVENT_BOOTSTRAP_TRANSFER_COMPLETE: 
+	{
 		LOG_DBG("Bootstrap transfer complete");
-		break;
+
+		uint8_t mode = 0;
+		int ret;
+		char pathstr[MAX_RESOURCE_LEN];
+		int sec_obj_inst = 0;
+		
+		ret = sm_select_security_inst(false,
+					      &sec_obj_inst);
+		if (ret < 0) {
+			LOG_ERR("Unable to find a valid security instance.");
+		} else {
+			snprintk(pathstr, sizeof(pathstr), "%d/%d/2", LWM2M_OBJECT_SECURITY_ID,
+				sec_obj_inst);
+
+			ret = lwm2m_engine_get_u8(pathstr, &mode);
+			if (ret < 0) {
+				LOG_ERR("Unable to get resource data for '%s'", pathstr);
+			} else {
+				LOG_DBG("%s Sec Mode: %d", pathstr, mode);
+				if (mode == 0) {
+					/* Clear load_credentials callback to ensure PSK is used by transport */
+					client->load_credentials = NULL;
+				} else {
+					LOG_ERR("Security mode %d not supported", mode);
+				}
+			}
+		} 
+	}
+	break;
 
 	case LWM2M_RD_CLIENT_EVENT_REGISTRATION_FAILURE:
 		LOG_DBG("Registration failure!");
@@ -483,7 +563,7 @@ int lcz_lwm2m_client_unregister_event_callback(struct lcz_lwm2m_client_event_cal
 
 int lcz_lwm2m_client_connect(int lwm2m_client_index, int init_sec_obj_inst, int init_srv_obj_inst,
 			     char *endpoint_name, lcz_lwm2m_client_transport_t transport,
-			     int security_tag)
+			     int security_tag, load_credentials_cb_t load_credentials)
 {
 	int ret = 0;
 	uint32_t flags;
@@ -499,6 +579,13 @@ int lcz_lwm2m_client_connect(int lwm2m_client_index, int init_sec_obj_inst, int 
 			lwc_inst->client.sock_fd = -1;
 #if defined(CONFIG_LWM2M_DTLS_SUPPORT)
 			if (security_tag >= 0) {
+				lcz_lwm2m_client_security_mode_t sec_mode = LCZ_LWM2M_CLIENT_SECURITY_MODE_PSK;
+				ret = attr_get(ATTR_ID_lwm2m_security, &sec_mode, sizeof(sec_mode));
+				if(ret > 0) {
+					if(sec_mode == LCZ_LWM2M_CLIENT_SECURITY_MODE_CERT) {
+						lwc_inst->client.load_credentials = load_credentials;
+					}
+				}
 				lwc_inst->client.tls_tag = security_tag;
 			}
 #endif

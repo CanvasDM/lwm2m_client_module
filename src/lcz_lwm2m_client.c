@@ -192,6 +192,11 @@ static int sm_select_security_inst(bool bootstrap_server, int *sec_obj_inst)
 
 static void rd_client_event(struct lwm2m_ctx *client, enum lwm2m_rd_client_event client_event)
 {
+	uint8_t mode = 0;
+	int ret;
+	char pathstr[MAX_RESOURCE_LEN];
+	int sec_obj_inst = 0;
+
 	switch (client_event) {
 	case LWM2M_RD_CLIENT_EVENT_NONE:
 		/* Do nothing */
@@ -206,22 +211,14 @@ static void rd_client_event(struct lwm2m_ctx *client, enum lwm2m_rd_client_event
 		LOG_DBG("Bootstrap registration complete");
 		break;
 
-	case LWM2M_RD_CLIENT_EVENT_BOOTSTRAP_TRANSFER_COMPLETE: 
-	{
+	case LWM2M_RD_CLIENT_EVENT_BOOTSTRAP_TRANSFER_COMPLETE:
 		LOG_DBG("Bootstrap transfer complete");
-
-		uint8_t mode = 0;
-		int ret;
-		char pathstr[MAX_RESOURCE_LEN];
-		int sec_obj_inst = 0;
-		
-		ret = sm_select_security_inst(false,
-					      &sec_obj_inst);
+		ret = sm_select_security_inst(false, &sec_obj_inst);
 		if (ret < 0) {
 			LOG_ERR("Unable to find a valid security instance.");
 		} else {
 			snprintk(pathstr, sizeof(pathstr), "%d/%d/2", LWM2M_OBJECT_SECURITY_ID,
-				sec_obj_inst);
+				 sec_obj_inst);
 
 			ret = lwm2m_engine_get_u8(pathstr, &mode);
 			if (ret < 0) {
@@ -229,15 +226,16 @@ static void rd_client_event(struct lwm2m_ctx *client, enum lwm2m_rd_client_event
 			} else {
 				LOG_DBG("%s Sec Mode: %d", pathstr, mode);
 				if (mode == 0) {
+#if defined(CONFIG_LWM2M_DTLS_SUPPORT)
 					/* Clear load_credentials callback to ensure PSK is used by transport */
 					client->load_credentials = NULL;
+#endif
 				} else {
 					LOG_ERR("Security mode %d not supported", mode);
 				}
 			}
-		} 
-	}
-	break;
+		}
+		break;
 
 	case LWM2M_RD_CLIENT_EVENT_REGISTRATION_FAILURE:
 		LOG_DBG("Registration failure!");
@@ -579,11 +577,13 @@ int lcz_lwm2m_client_connect(int lwm2m_client_index, int init_sec_obj_inst, int 
 			lwc_inst->client.sock_fd = -1;
 #if defined(CONFIG_LWM2M_DTLS_SUPPORT)
 			if (security_tag >= 0) {
-				lcz_lwm2m_client_security_mode_t sec_mode = LCZ_LWM2M_CLIENT_SECURITY_MODE_PSK;
+				lcz_lwm2m_client_security_mode_t sec_mode =
+					LCZ_LWM2M_CLIENT_SECURITY_MODE_PSK;
 				ret = attr_get(ATTR_ID_lwm2m_security, &sec_mode, sizeof(sec_mode));
-				if(ret > 0) {
-					if(sec_mode == LCZ_LWM2M_CLIENT_SECURITY_MODE_CERT) {
-						lwc_inst->client.load_credentials = load_credentials;
+				if (ret > 0) {
+					if (sec_mode == LCZ_LWM2M_CLIENT_SECURITY_MODE_CERT) {
+						lwc_inst->client.load_credentials =
+							load_credentials;
 					}
 				}
 				lwc_inst->client.tls_tag = security_tag;
@@ -819,8 +819,7 @@ int lcz_lwm2m_client_set_battery_status(lcz_lwm2m_client_device_battery_status_t
 #endif
 
 	ret = lwm2m_engine_set_res_buf(LWM2M_PATH(LWM2M_OBJECT_DEVICE_ID, 0, 20), status,
-				       sizeof(uint8_t), sizeof(uint8_t),
-				       LWM2M_RES_DATA_FLAG_RO);
+				       sizeof(uint8_t), sizeof(uint8_t), LWM2M_RES_DATA_FLAG_RO);
 exit:
 	return ret;
 }

@@ -11,7 +11,7 @@ attributes:
       pattern: coaps?://(\.?|\w|[-|_])+([\.|/]((\w|[0-9]|[-|_])*))+(\:[0-9]{1,5})?
     x-ctype: string
     x-broadcast: true
-    x-default: coap://leshan.eclipseprojects.io:5683
+    x-default: coap://my.lwm2m.server.com:5683
     x-example: coaps://leshan.eclipseprojects.io:5784
     x-prepare: false
     x-readable: true
@@ -22,11 +22,11 @@ attributes:
     required: true
     schema:
       maxLength: 64
-      minLength: 1
+      minLength: 0
       type: string
     x-ctype: string
     x-broadcast: true
-    x-default: my_device
+    x-default: ""
     x-prepare: false
     x-readable: true
     x-savable: true
@@ -57,12 +57,11 @@ attributes:
     required: true
     schema:
       maxLength: 64
-      minLength: 1
+      minLength: 0
       type: string
     x-ctype: string
     x-broadcast: true
-    x-default: my_device
-    x-example: my_device
+    x-default: ""
     x-prepare: false
     x-readable: true
     x-savable: true
@@ -135,11 +134,11 @@ attributes:
     required: false
     schema:
       maxLength: 32
-      minLength: 1
+      minLength: 0
       type: string
     x-ctype: string
     x-broadcast: true
-    x-default: model
+    x-default: ""
     x-prepare: false
     x-readable: true
     x-savable: true
@@ -149,11 +148,11 @@ attributes:
     required: false
     schema:
       maxLength: 64
-      minLength: 1
+      minLength: 0
       type: string
     x-ctype: string
     x-broadcast: true
-    x-default: serial_number
+    x-default: ""
     x-prepare: false
     x-readable: true
     x-savable: true
